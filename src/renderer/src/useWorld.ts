@@ -17,6 +17,13 @@ export function useWorld(): { world: WorldState; log: PokeHubEvent[] } {
   const worldRef = useRef(world);
 
   useEffect(() => {
+    // No preload bridge (opened outside Electron, or preload failed to load) —
+    // render an empty-but-alive world rather than throwing the tree away.
+    if (!window.pokehub) {
+      console.warn("window.pokehub missing — running without the agent bridge");
+      return;
+    }
+
     let ready = false;
     let buffer: PokeHubEvent[] = [];
 

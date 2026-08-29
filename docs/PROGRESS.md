@@ -129,8 +129,20 @@ _Things learned the hard way. One line each — what broke, and what fixed it._
   acts strangely.
 - **`bashSegments` split on bare `&` broke `2>&1`** — `vitest 2>&1` became two segments and
   the `1` failed the allow-list. Fix: blank `\d*>&[\d-]+` fd-dups before splitting.
-- **Bundling `pixi.js` pushes the renderer chunk to ~1.08 MB**, past Vite's 500 kB warning.
+- **Bundling `pixi.js` pushes the renderer chunk to ~1.15 MB**, past Vite's 500 kB warning.
   Expected; code-split at Phase 4 packaging.
+- **Pixi v8 WebGL renderer needs `unsafe-eval`; the renderer CSP forbids it.** `index.html`
+  has `script-src 'self'` (no `'unsafe-eval'`), so `Application.init()` threw
+  "environment does not allow unsafe-eval" and the map panel sat blank. Fix: a side-effect
+  `import "pixi.js/unsafe-eval"` before `Application.init()` — swaps in eval-free shader-sync
+  polyfills. Keep the strict CSP.
+- **A missing `window.pokehub` (preload) took the whole React tree down** — `useWorld`'s
+  effect threw on `.onAgentEvent` and React unmounted everything, so even a Pixi error was
+  invisible. `useWorld` + `App` now no-op without the bridge; the map renders in a plain
+  browser too, which is how the CSP bug was finally caught (`npm run dev` → localhost:5173).
+- **The thought bubble only shows the first line of an agent's reply** — `translate` records
+  `firstLine(text)` for `agent.thinking`. The full assistant response is never captured
+  anywhere. Phase 1 needs an agent-focus view + a fuller text event.
 
 ## VISION.md needs updating
 

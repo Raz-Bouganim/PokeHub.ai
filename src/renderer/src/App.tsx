@@ -19,6 +19,7 @@ export function App() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    if (!window.pokehub) return;
     // Queue asks — a second agent's encounter must not clobber the first.
     return window.pokehub.onPermissionAsk((envelope) =>
       setAskQueue((q) => [...q, envelope]),

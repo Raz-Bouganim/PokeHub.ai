@@ -8,7 +8,12 @@
  * (decided item #2); smooth walking is best-effort polish, deferred.
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+// The renderer runs under a strict CSP (`script-src 'self'`, no `unsafe-eval`).
+// Pixi v8's WebGL renderer compiles shader-sync code with `new Function` by
+// default; this side-effect import swaps in eval-free polyfills. Must load
+// before `Application.init()`.
+import "pixi.js/unsafe-eval";
 import { Application, Container, Graphics, Text } from "pixi.js";
 import type { Location } from "../../core/events.ts";
 import type { AgentStatus, WorldState } from "../../core/world.ts";
@@ -78,6 +83,34 @@ function bubbleText(a: ReturnType<typeof agentList>[number]): string {
   return "";
 }
 
+function drawRooms(stage: Container): void {
+  const rooms = new Container();
+  for (const key of Object.keys(ROOMS) as Location[]) {
+    const r = ROOMS[key];
+    rooms.addChild(
+      new Graphics()
+        .roundRect(r.x, r.y, r.w, r.h, 6)
+        .fill(r.color)
+        .stroke({ width: 1, color: 0x000000, alpha: 0.3 }),
+    );
+    const label = new Text({
+      text: r.label,
+      style: {
+        fill: 0xffffff,
+        fontSize: 11,
+        fontFamily: "monospace",
+        fontWeight: "bold",
+        letterSpacing: 1,
+      },
+    });
+    label.alpha = 0.65;
+    label.x = r.x + 10;
+    label.y = r.y + 8;
+    rooms.addChild(label);
+  }
+  stage.addChild(rooms);
+}
+
 function renderAgents(
   layer: Container,
   sprites: Map<string, Sprite>,
@@ -135,9 +168,9 @@ function renderAgents(
 
 export function WorldMap({ world }: { world: WorldState }): JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null);
-  const appRef = useRef<Application | null>(null);
   const layerRef = useRef<Container | null>(null);
   const spritesRef = useRef<Map<string, Sprite>>(new Map());
+  const [error, setError] = useState<string | null>(null);
   // Kept current by the render effect so the async init below draws the latest
   // world, not the one captured at mount — events can stream in during init().
   const worldRef = useRef(world);
@@ -154,55 +187,44 @@ export function WorldMap({ world }: { world: WorldState }): JSX.Element {
     const app = new Application();
 
     void app
-      .init({ width: W, height: H, background: 0x0f1020, antialias: true })
+      .init({
+        width: W,
+        height: H,
+        background: 0x0f1020,
+        antialias: true,
+        preference: "webgl",
+        // Electron's compositor can report devicePixelRatio oddly on first
+        // paint; pin it so the canvas is never created 0-sized.
+        resolution: 1,
+        autoDensity: true,
+      })
       .then(() => {
         initialised = true;
         if (disposed) {
           app.destroy(true, { children: true });
           return;
         }
-        appRef.current = app;
-        app.canvas.style.width = "100%";
-        app.canvas.style.maxWidth = `${W}px`;
-        app.canvas.style.height = "auto";
-        host.appendChild(app.canvas);
+        const canvas = app.canvas;
+        canvas.style.position = "absolute";
+        canvas.style.inset = "0";
+        canvas.style.width = "100%";
+        canvas.style.height = "100%";
+        host.appendChild(canvas);
 
-        const rooms = new Container();
-        for (const key of Object.keys(ROOMS) as Location[]) {
-          const r = ROOMS[key];
-          rooms.addChild(
-            new Graphics()
-              .roundRect(r.x, r.y, r.w, r.h, 6)
-              .fill(r.color)
-              .stroke({ width: 1, color: 0x000000, alpha: 0.3 }),
-          );
-          const label = new Text({
-            text: r.label,
-            style: {
-              fill: 0xffffff,
-              fontSize: 11,
-              fontFamily: "monospace",
-              fontWeight: "bold",
-              letterSpacing: 1,
-            },
-          });
-          label.alpha = 0.65;
-          label.x = r.x + 10;
-          label.y = r.y + 8;
-          rooms.addChild(label);
-        }
-        app.stage.addChild(rooms);
-
+        drawRooms(app.stage);
         const layer = new Container();
         app.stage.addChild(layer);
         layerRef.current = layer;
-
         renderAgents(layer, spritesRef.current, worldRef.current);
+      })
+      .catch((err: unknown) => {
+        // A dead Pixi panel should say why, not sit blank.
+        console.error("[WorldMap] Pixi init failed", err);
+        if (!disposed) setError(err instanceof Error ? err.message : String(err));
       });
 
     return () => {
       disposed = true;
-      appRef.current = null;
       layerRef.current = null;
       spritesRef.current = new Map();
       if (initialised) app.destroy(true, { children: true });
@@ -218,5 +240,9 @@ export function WorldMap({ world }: { world: WorldState }): JSX.Element {
     }
   }, [world]);
 
-  return <div className="map-host" ref={hostRef} />;
+  return (
+    <div className="map-host" ref={hostRef}>
+      {error && <div className="map-error">map renderer failed: {error}</div>}
+    </div>
+  );
 }
