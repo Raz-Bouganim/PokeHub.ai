@@ -1,0 +1,15 @@
+{"v":1,"seq":1,"ts":"2026-08-29T10:00:00.000Z","source":"agent","agentId":"scout-1","sessionId":null,"kind":"agent.spawned","name":"Rowan","agentClass":"Scout","cwd":"/repo"}
+{"v":1,"seq":2,"ts":"2026-08-29T10:00:01.000Z","source":"agent","agentId":"scout-1","sessionId":"sess-abc","kind":"agent.session_started","sessionId":"sess-abc"}
+{"v":1,"seq":3,"ts":"2026-08-29T10:00:02.000Z","source":"agent","agentId":"scout-1","sessionId":"sess-abc","kind":"agent.thinking","thought":"Looking for the auth entrypoint"}
+{"v":1,"seq":4,"ts":"2026-08-29T10:00:03.000Z","source":"agent","agentId":"scout-1","sessionId":"sess-abc","kind":"tool.started","toolCallId":"t1","tool":"Grep","input":{"pattern":"login"}}
+{"v":1,"seq":5,"ts":"2026-08-29T10:00:04.000Z","source":"agent","agentId":"scout-1","sessionId":"sess-abc","kind":"tool.finished","toolCallId":"t1","tool":"Grep","ok":true,"summary":"3 matches"}
+{"v":1,"seq":6,"ts":"2026-08-29T10:00:05.000Z","source":"agent","agentId":"scout-1","sessionId":"sess-abc","kind":"tool.started","toolCallId":"t2","tool":"Read","input":{"file_path":"/repo/src/auth.ts"}}
+{"v":1,"seq":7,"ts":"2026-08-29T10:00:06.000Z","source":"agent","agentId":"scout-1","sessionId":"sess-abc","kind":"tool.finished","toolCallId":"t2","tool":"Read","ok":true}
+{"v":1,"seq":8,"ts":"2026-08-29T10:00:07.000Z","source":"agent","agentId":"scout-1","sessionId":"sess-abc","kind":"tool.started","toolCallId":"t3","tool":"Edit","input":{"file_path":"/repo/src/auth.ts"}}
+{"v":1,"seq":9,"ts":"2026-08-29T10:00:08.000Z","source":"agent","agentId":"scout-1","sessionId":"sess-abc","kind":"permission.requested","toolCallId":"t3","tool":"Edit","input":{"file_path":"/repo/src/auth.ts"}}
+{"v":1,"seq":10,"ts":"2026-08-29T10:00:20.000Z","source":"user","agentId":"scout-1","sessionId":"sess-abc","kind":"permission.resolved","toolCallId":"t3","decision":"allow_once"}
+{"v":1,"seq":11,"ts":"2026-08-29T10:00:21.000Z","source":"agent","agentId":"scout-1","sessionId":"sess-abc","kind":"tool.started","toolCallId":"t3","tool":"Edit","input":{"file_path":"/repo/src/auth.ts"}}
+{"v":1,"seq":12,"ts":"2026-08-29T10:00:22.000Z","source":"agent","agentId":"scout-1","sessionId":"sess-abc","kind":"tool.finished","toolCallId":"t3","tool":"Edit","ok":true,"summary":"+4 / -1"}
+{"v":1,"seq":13,"ts":"2026-08-29T10:00:23.000Z","source":"agent","agentId":"scout-1","sessionId":"sess-abc","kind":"tool.started","toolCallId":"t4","tool":"Bash","input":{"command":"npm test"}}
+{"v":1,"seq":14,"ts":"2026-08-29T10:00:40.000Z","source":"agent","agentId":"scout-1","sessionId":"sess-abc","kind":"tool.finished","toolCallId":"t4","tool":"Bash","ok":false,"summary":"1 failing"}
+{"v":1,"seq":15,"ts":"2026-08-29T10:00:41.000Z","source":"agent","agentId":"scout-1","sessionId":"sess-abc","kind":"agent.exited","code":0}

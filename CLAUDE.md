@@ -19,8 +19,10 @@ as a Pokemon-style map. Full spec: @VISION.md — read it before any design deci
 - Permissions flow through the Agent SDK's `canUseTool` callback.
 
 ## Stack
-Tauri v2 (Electron acceptable) + React + TypeScript + PixiJS + `@anthropic-ai/claude-agent-sdk`
-+ SQLite. Package manager: npm.
+Electron + React + TypeScript + PixiJS + `@anthropic-ai/claude-agent-sdk`. Package manager: npm.
+Shell is Electron (the Agent SDK and `canUseTool` are Node-only); a Tauri port stays possible
+because no business logic imports Electron. Event log is NDJSON on disk; SQLite deferred until
+after the spike.
 
 ## Hard constraints
 - Never handle Claude subscription credentials. The app drives the user's already-logged-in

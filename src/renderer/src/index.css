@@ -1,0 +1,143 @@
+:root {
+  color-scheme: dark;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #0f1020;
+  color: #d7d9e8;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto 1fr;
+  gap: 12px;
+  height: 100vh;
+  padding: 12px;
+}
+
+.bar {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.bar input,
+.bar textarea {
+  background: #1a1b30;
+  border: 1px solid #333457;
+  color: inherit;
+  padding: 6px 8px;
+  font: inherit;
+  border-radius: 4px;
+}
+
+.bar input {
+  width: 120px;
+}
+
+.bar textarea {
+  flex: 1;
+  height: 34px;
+  resize: vertical;
+}
+
+button {
+  background: #2d2f5c;
+  border: 1px solid #4a4d8f;
+  color: inherit;
+  padding: 6px 12px;
+  font: inherit;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #3a3d75;
+}
+
+.panel {
+  background: #16172b;
+  border: 1px solid #2a2b45;
+  border-radius: 6px;
+  padding: 10px;
+  overflow: auto;
+}
+
+.panel h2 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #8a8db5;
+}
+
+.agent {
+  border: 1px solid #2a2b45;
+  border-radius: 4px;
+  padding: 8px;
+  margin-bottom: 8px;
+}
+
+.agent .room {
+  color: #7fd7a5;
+}
+
+.agent .status-blocked {
+  color: #ffcf5c;
+}
+
+.agent .status-erroring {
+  color: #ff7a7a;
+}
+
+.log-line {
+  white-space: pre-wrap;
+  word-break: break-all;
+  border-bottom: 1px solid #1e1f38;
+  padding: 2px 0;
+}
+
+.log-line .kind {
+  color: #9aa0d8;
+}
+
+.encounter-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 4, 12, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.encounter {
+  background: #1a1b30;
+  border: 2px solid #6b6ecb;
+  border-radius: 8px;
+  padding: 20px;
+  max-width: 620px;
+  width: 90%;
+}
+
+.encounter pre {
+  background: #0c0d1c;
+  border: 1px solid #333457;
+  border-radius: 4px;
+  padding: 10px;
+  overflow-x: auto;
+}
+
+.encounter .actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
