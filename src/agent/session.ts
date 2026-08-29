@@ -13,7 +13,7 @@
 
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import type { PokeHubEvent } from "../core/events.ts";
-import { toolsForClass } from "../core/classes.ts";
+import { bashCommandAllowed, toolsForClass } from "../core/classes.ts";
 import type { PermissionAsk, PermissionDecision } from "../shared/permissions.ts";
 import { EventLog } from "./eventLog.ts";
 import { translate } from "./translate.ts";
@@ -100,6 +100,27 @@ export function spawnAgent(opts: SpawnAgentOptions): AgentHandle {
               tool: toolName,
               input,
             });
+
+            // Class enforcement the tool allow-list can't express: Bash is one
+            // tool spanning many capabilities, so Runner ("no writes") and
+            // Keeper ("git only") are gated here, at call time. The user is not
+            // asked — the class already decided.
+            if (toolName === "Bash") {
+              const command =
+                typeof input["command"] === "string" ? input["command"] : "";
+              const verdict = bashCommandAllowed(opts.agentClass, command);
+              if (!verdict.ok) {
+                emit({
+                  kind: "permission.resolved",
+                  source: "system",
+                  agentId: opts.agentId,
+                  sessionId,
+                  toolCallId: toolUseID,
+                  decision: "refuse",
+                });
+                return { behavior: "deny", message: verdict.reason };
+              }
+            }
 
             const ask: PermissionAsk = {
               agentId: opts.agentId,

@@ -26,40 +26,51 @@ import {
 
 const isDev = !app.isPackaged;
 
+/** How long a permission ask waits for the renderer to confirm receipt before
+ *  it is treated as undeliverable and failed closed. A healthy renderer acks in
+ *  a single IPC round-trip; this only expires when React has crashed or never
+ *  registered a handler. It is NOT a decision deadline — once acked, the ask
+ *  waits indefinitely for the user. */
+const ACK_DEADLINE_MS = 15_000;
+
 let mainWindow: BrowserWindow | null = null;
 
 /** Every agent we have spawned this session, by id. */
 const agents = new Map<string, AgentHandle>();
 
+interface PendingAsk {
+  agentId: string;
+  resolve: (d: PermissionDecision) => void;
+  /** Fires if the renderer never acks; cleared on ack and on resolution. */
+  ackTimer: ReturnType<typeof setTimeout>;
+}
+
 /** Outstanding `canUseTool` asks, by correlation id. Every entry MUST be
- *  resolved exactly once — on answer, on that agent exiting, or on shutdown —
- *  or the SDK's `canUseTool` promise hangs forever (it has no timeout). */
-const pendingAsks = new Map<
-  string,
-  { agentId: string; resolve: (d: PermissionDecision) => void }
->();
+ *  resolved exactly once — on answer, on ack timeout, on that agent exiting, on
+ *  renderer loss, or on shutdown — or the SDK's `canUseTool` promise hangs
+ *  forever (it has no timeout). */
+const pendingAsks = new Map<string, PendingAsk>();
+
+function discardAsk(id: string): PendingAsk | undefined {
+  const entry = pendingAsks.get(id);
+  if (!entry) return undefined;
+  clearTimeout(entry.ackTimer);
+  pendingAsks.delete(id);
+  return entry;
+}
 
 function resolveAsk(id: string, decision: PermissionDecision): void {
-  const entry = pendingAsks.get(id);
-  if (!entry) return;
-  pendingAsks.delete(id);
-  entry.resolve(decision);
+  discardAsk(id)?.resolve(decision);
 }
 
 function resolveAsksForAgent(agentId: string, decision: PermissionDecision): void {
   for (const [id, entry] of pendingAsks) {
-    if (entry.agentId === agentId) {
-      pendingAsks.delete(id);
-      entry.resolve(decision);
-    }
+    if (entry.agentId === agentId) discardAsk(id)?.resolve(decision);
   }
 }
 
 function resolveAllAsks(decision: PermissionDecision): void {
-  for (const [id, entry] of pendingAsks) {
-    pendingAsks.delete(id);
-    entry.resolve(decision);
-  }
+  for (const id of [...pendingAsks.keys()]) discardAsk(id)?.resolve(decision);
 }
 
 function sendToRenderer(channel: string, payload: unknown): void {
@@ -83,6 +94,13 @@ function createWindow(): void {
     // No renderer to answer encounters any more — fail them closed.
     resolveAllAsks("refuse");
     if (mainWindow === win) mainWindow = null;
+  });
+
+  win.webContents.on("render-process-gone", () => {
+    // The renderer process crashed; the window is still up but nothing can
+    // answer an encounter. Fail outstanding asks closed instead of hanging
+    // every blocked agent until the window is closed by hand.
+    resolveAllAsks("refuse");
   });
 
   if (isDev && process.env["ELECTRON_RENDERER_URL"]) {
@@ -127,7 +145,11 @@ app.whenReady().then(() => {
               return;
             }
             const id = randomUUID();
-            pendingAsks.set(id, { agentId, resolve });
+            const ackTimer = setTimeout(() => {
+              // Renderer never confirmed receipt — undeliverable, fail closed.
+              discardAsk(id)?.resolve("refuse");
+            }, ACK_DEADLINE_MS);
+            pendingAsks.set(id, { agentId, resolve, ackTimer });
             sendToRenderer(IPC.permissionAsk, { id, ask });
           }),
       });
@@ -138,6 +160,13 @@ app.whenReady().then(() => {
       return { agentId, logPath };
     },
   );
+
+  ipcMain.on(IPC.permissionAck, (_evt, { id }: { id: string }) => {
+    // Receipt confirmed — stop the undeliverable timer; now wait for the user
+    // as long as it takes.
+    const entry = pendingAsks.get(id);
+    if (entry) clearTimeout(entry.ackTimer);
+  });
 
   ipcMain.on(IPC.permissionAnswer, (_evt, answer: PermissionAnswer) => {
     resolveAsk(answer.id, answer.decision);

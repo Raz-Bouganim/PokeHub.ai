@@ -28,6 +28,7 @@ function blankAgent(id: string): AgentState {
     thought: null,
     activeTools: [],
     pendingPermissions: [],
+    refusedToolCallIds: [],
     exitCode: null,
     exitReason: null,
     lastEventTs: null,
@@ -59,6 +60,11 @@ function applyToAgent(prev: AgentState, event: PokeHubEvent): AgentState {
     lastSeq: event.seq,
     sessionId: event.sessionId ?? prev.sessionId,
   };
+
+  // A finished agent stays finished. Late, duplicated or out-of-order frames
+  // (snapshot + live overlap, a tool result racing the exit) must not revive it
+  // as `thinking` or `erroring` — only the seq/ts bump in `base` passes through.
+  if (prev.status === "exited") return base;
 
   switch (event.kind) {
     case "agent.spawned":
@@ -95,13 +101,21 @@ function applyToAgent(prev: AgentState, event: PokeHubEvent): AgentState {
       const activeTools = base.activeTools.filter(
         (t) => t.toolCallId !== event.toolCallId,
       );
+      // A refused call comes back `ok: false` (the SDK feeds the model an error
+      // result), but the user chose that — it is not an erroring agent. Settle
+      // it like a success and forget the id.
+      const wasRefused = base.refusedToolCallIds.includes(event.toolCallId);
+      const settledOk = event.ok || wasRefused;
       return {
         ...base,
         activeTools,
+        refusedToolCallIds: wasRefused
+          ? base.refusedToolCallIds.filter((id) => id !== event.toolCallId)
+          : base.refusedToolCallIds,
         // Still working while any other tool is in flight; only the last one
         // finishing settles the status.
         status:
-          activeTools.length > 0 ? "working" : event.ok ? "thinking" : "erroring",
+          activeTools.length > 0 ? "working" : settledOk ? "thinking" : "erroring",
       };
     }
 
@@ -151,6 +165,13 @@ function applyToAgent(prev: AgentState, event: PokeHubEvent): AgentState {
       return {
         ...base,
         pendingPermissions,
+        // Remember a refusal so the error tool_result the SDK sends next does
+        // not read as an erroring agent (see `tool.finished`).
+        refusedToolCallIds:
+          event.decision === "refuse" &&
+          !base.refusedToolCallIds.includes(event.toolCallId)
+            ? [...base.refusedToolCallIds, event.toolCallId]
+            : base.refusedToolCallIds,
         status: unblocked
           ? base.activeTools.length > 0
             ? "working"
@@ -167,6 +188,7 @@ function applyToAgent(prev: AgentState, event: PokeHubEvent): AgentState {
         exitReason: event.reason ?? null,
         activeTools: [],
         pendingPermissions: [],
+        refusedToolCallIds: [],
         location: "route",
       };
 

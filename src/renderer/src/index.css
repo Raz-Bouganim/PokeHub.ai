@@ -64,6 +64,31 @@ button:hover {
   background: #3a3d75;
 }
 
+.left {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.left .panel:last-child {
+  flex: 1;
+  min-height: 0;
+}
+
+.map-panel {
+  flex: none;
+}
+
+.map-host {
+  width: 100%;
+}
+
+.map-host canvas {
+  display: block;
+  border-radius: 4px;
+}
+
 .panel {
   background: #16172b;
   border: 1px solid #2a2b45;

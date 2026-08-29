@@ -4,6 +4,7 @@
  * proof that the pipe (SDK -> translate -> log -> reducer -> world) is real.
  *
  *   npm run spike -- --cwd /path/to/repo --prompt "find the auth entrypoint"
+ *   npm run spike -- --cwd /path/to/repo --class Runner --prompt "run the tests"
  *
  * Permissions auto-allow here (the encounter screen is the app's job); every
  * ask still lands in the log as permission.requested / permission.resolved.
@@ -21,6 +22,7 @@ const { values } = parseArgs({
     cwd: { type: "string", default: process.cwd() },
     prompt: { type: "string" },
     name: { type: "string", default: "Spike" },
+    class: { type: "string", default: "Builder" },
   },
 });
 
@@ -37,7 +39,7 @@ let world = initialWorld();
 const handle = spawnAgent({
   agentId,
   name: values.name!,
-  agentClass: "Builder",
+  agentClass: values.class!,
   cwd: values.cwd!,
   prompt: values.prompt,
   logPath,

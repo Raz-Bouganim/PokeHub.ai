@@ -42,6 +42,12 @@ export interface AgentState {
   activeTools: ActiveTool[];
   /** canUseTool asks awaiting the user, oldest first. */
   pendingPermissions: PendingPermission[];
+  /** toolCallIds the user (or a class rule) refused. The SDK still feeds the
+   *  model an error tool_result for these, which arrives as `tool.finished`
+   *  with `ok: false` — but a deliberate refusal is not an `erroring` agent, so
+   *  the reducer consults this to settle the status calmly. Cleared per id when
+   *  that result lands. */
+  refusedToolCallIds: string[];
   exitCode: number | null;
   /** Why the session ended abnormally (SDK result subtype), if it did. */
   exitReason: string | null;

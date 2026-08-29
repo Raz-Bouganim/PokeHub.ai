@@ -46,6 +46,11 @@ export const IPC = {
   agentEvent: "agent:event",
   /** main -> renderer, send: PermissionAskEnvelope */
   permissionAsk: "permission:ask",
+  /** renderer -> main, send: { id } — "I received and displayed this ask".
+   *  Sent by the preload the moment a handler accepts the envelope without
+   *  throwing. Its absence within the deadline tells main the renderer is not
+   *  fit to answer (crashed React, no listener) so the ask fails closed. */
+  permissionAck: "permission:ack",
   /** renderer -> main, send: PermissionAnswer */
   permissionAnswer: "permission:answer",
 } as const;

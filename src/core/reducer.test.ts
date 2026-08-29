@@ -165,6 +165,63 @@ describe("reducer — multiple pending permissions", () => {
   });
 });
 
+describe("reducer — a refusal is not an erroring agent", () => {
+  // Refuse -> SDK feeds the model an error tool_result -> tool.finished ok:false.
+  // The agent turned red for doing the safe thing; it should just move on.
+  const stream: PokeHubEvent[] = [
+    ev({ seq: 1, agentId: "R", kind: "agent.spawned", name: "Ru", agentClass: "Builder", cwd: "/r" }),
+    ev({ seq: 2, agentId: "R", kind: "tool.started", toolCallId: "x1", tool: "Bash", input: { command: "rm -rf dist" } }),
+    ev({ seq: 3, agentId: "R", kind: "permission.requested", toolCallId: "x1", tool: "Bash", input: { command: "rm -rf dist" } }),
+    ev({ seq: 4, agentId: "R", kind: "permission.resolved", toolCallId: "x1", decision: "refuse" }),
+    ev({ seq: 5, agentId: "R", kind: "tool.finished", toolCallId: "x1", ok: false }),
+  ];
+
+  it("settles to thinking, not erroring, and clears the refused id", () => {
+    const world = replay(stream, initialWorld());
+    const agent = world.agents["R"]!;
+    expect(agent.status).toBe("thinking");
+    expect(agent.refusedToolCallIds).toEqual([]);
+    expect(needsAttention(world)).toEqual([]);
+  });
+
+  it("still goes erroring on a genuine tool failure alongside a refusal", () => {
+    const withRealError: PokeHubEvent[] = [
+      ...stream,
+      ev({ seq: 6, agentId: "R", kind: "tool.started", toolCallId: "x2", tool: "Bash", input: { command: "npm test" } }),
+      ev({ seq: 7, agentId: "R", kind: "tool.finished", toolCallId: "x2", ok: false }),
+    ];
+    expect(replay(withRealError, initialWorld()).agents["R"]!.status).toBe("erroring");
+  });
+});
+
+describe("reducer — a finished agent stays finished", () => {
+  const base: PokeHubEvent[] = [
+    ev({ seq: 1, agentId: "Z", kind: "agent.spawned", name: "Zed", agentClass: "Scout", cwd: "/z" }),
+    ev({ seq: 2, agentId: "Z", kind: "tool.started", toolCallId: "z1", tool: "Read", input: {} }),
+    ev({ seq: 3, agentId: "Z", kind: "agent.exited", code: 0 }),
+  ];
+
+  it("ignores a late tool.finished that would otherwise flip it to erroring", () => {
+    const world = replay(
+      [...base, ev({ seq: 4, agentId: "Z", kind: "tool.finished", toolCallId: "z1", ok: false })],
+      initialWorld(),
+    );
+    const agent = world.agents["Z"]!;
+    expect(agent.status).toBe("exited");
+    expect(agent.activeTools).toEqual([]);
+    expect(agent.lastSeq).toBe(4);
+  });
+
+  it("ignores a stray agent.thinking after exit", () => {
+    const world = replay(
+      [...base, ev({ seq: 4, agentId: "Z", kind: "agent.thinking", thought: "back?" })],
+      initialWorld(),
+    );
+    expect(world.agents["Z"]!.status).toBe("exited");
+    expect(world.agents["Z"]!.thought).toBeNull();
+  });
+});
+
 describe("reducer — purity guarantees", () => {
   const events = parseLog(readFileSync(fixture, "utf8"));
 

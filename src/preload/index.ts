@@ -28,8 +28,13 @@ const bridge: PokeHubBridge = {
   },
 
   onPermissionAsk: (handler) => {
-    const listener = (_e: unknown, envelope: PermissionAskEnvelope) =>
+    const listener = (_e: unknown, envelope: PermissionAskEnvelope) => {
+      // Ack only after the handler takes it without throwing. A crashed React
+      // tree (handler throws, or never registered) sends no ack, and main
+      // fails the ask closed rather than leaving the agent blocked forever.
       handler(envelope);
+      ipcRenderer.send(IPC.permissionAck, { id: envelope.id });
+    };
     ipcRenderer.on(IPC.permissionAsk, listener);
     return () => ipcRenderer.off(IPC.permissionAsk, listener);
   },

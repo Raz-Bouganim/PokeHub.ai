@@ -5,6 +5,7 @@ import type { PermissionDecision } from "../../shared/permissions.ts";
 import { knownClasses } from "../../core/classes.ts";
 import { agentList } from "../../core/selectors.ts";
 import { useWorld } from "./useWorld.ts";
+import { WorldMap } from "./WorldMap.tsx";
 
 const CLASSES = knownClasses();
 
@@ -71,42 +72,53 @@ export function App() {
         </button>
       </div>
 
-      <div className="panel">
-        <h2>
-          World — {agentList(world).length} agents · seq {world.maxSeqSeen}
-        </h2>
-        {agentList(world).map((a) => (
-          <div className="agent" key={a.id}>
-            <strong>{a.name}</strong> <span>({a.agentClass})</span>
-            {" — "}
-            <span className="room">{a.location}</span>
-            {" · "}
-            <span className={`status-${a.status}`}>{a.status}</span>
-            {a.status !== "exited" && (
-              <button
-                style={{ marginLeft: 8, padding: "1px 8px" }}
-                onClick={() => window.pokehub.stopAgent(a.id)}
-              >
-                stop
-              </button>
-            )}
-            {a.activeTools.length > 0 && (
-              <div>tools: {a.activeTools.map((t) => t.tool).join(", ")}</div>
-            )}
-            {a.thought && <div>💭 {a.thought}</div>}
-            {a.pendingPermissions[0] && (
-              <div>⏸ awaiting: {a.pendingPermissions[0].tool}</div>
-            )}
-            {a.exitReason && <div>ended: {a.exitReason}</div>}
-          </div>
-        ))}
-        {agentList(world).length === 0 && <p>No agents yet. Spawn one above.</p>}
+      <div className="left">
+        <div className="panel map-panel">
+          <h2>Map</h2>
+          <WorldMap world={world} />
+        </div>
+
+        <div className="panel">
+          <h2>
+            World — {agentList(world).length} agents · seq {world.maxSeqSeen}
+          </h2>
+          {agentList(world).map((a) => (
+            <div className="agent" key={a.id}>
+              <strong>{a.name}</strong> <span>({a.agentClass})</span>
+              {" — "}
+              <span className="room">{a.location}</span>
+              {" · "}
+              <span className={`status-${a.status}`}>{a.status}</span>
+              {a.status !== "exited" && (
+                <button
+                  style={{ marginLeft: 8, padding: "1px 8px" }}
+                  onClick={() => window.pokehub.stopAgent(a.id)}
+                >
+                  stop
+                </button>
+              )}
+              {a.activeTools.length > 0 && (
+                <div>tools: {a.activeTools.map((t) => t.tool).join(", ")}</div>
+              )}
+              {a.thought && <div>💭 {a.thought}</div>}
+              {a.pendingPermissions[0] && (
+                <div>⏸ awaiting: {a.pendingPermissions[0].tool}</div>
+              )}
+              {a.exitReason && <div>ended: {a.exitReason}</div>}
+            </div>
+          ))}
+          {agentList(world).length === 0 && (
+            <p>No agents yet. Spawn one above.</p>
+          )}
+        </div>
       </div>
 
       <div className="panel">
         <h2>Raw event log</h2>
-        {log.slice(-200).map((e, i) => (
-          <div className="log-line" key={`${e.agentId}-${e.seq}-${i}`}>
+        {log.slice(-200).map((e) => (
+          // (agentId, seq) is unique per agent and stable — no array index, or
+          // every row's key shifts on each new event once the log passes 200.
+          <div className="log-line" key={`${e.agentId}-${e.seq}`}>
             <span className="kind">
               {String(e.seq).padStart(3, "0")} {e.kind}
             </span>{" "}
