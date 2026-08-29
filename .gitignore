@@ -1,0 +1,15 @@
+# dependencies & builds
+node_modules/
+dist/
+target/
+*.tsbuildinfo
+
+# PokeHub runtime: event logs are per-session and can get large
+.pokehub/
+
+# personal Claude Code settings (shared config lives in .claude/ and IS committed)
+.claude/settings.local.json
+
+# os / editor
+.DS_Store
+*.log
