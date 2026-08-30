@@ -14,7 +14,48 @@
 
 import type { PokeHubEvent } from "./events.ts";
 import { roomForTool } from "./rooms.ts";
-import type { AgentState, WorldState } from "./world.ts";
+import { bubbleLine, toolTarget } from "./text.ts";
+import {
+  RECENT_TOOLS_LIMIT,
+  TRANSCRIPT_LIMIT,
+  type AgentState,
+  type RecentTool,
+  type TranscriptEntry,
+  type WorldState,
+} from "./world.ts";
+
+/** Append a turn to the capped transcript. Pure. Returns the new array and how
+ *  many turns fell off the front (0 or 1) so the focus view can honestly say
+ *  "N earlier turns are in the log" — an equality with the cap would lie at
+ *  exactly `TRANSCRIPT_LIMIT` turns, when nothing has been dropped yet. */
+function withTurn(
+  transcript: TranscriptEntry[],
+  entry: TranscriptEntry,
+): { transcript: TranscriptEntry[]; dropped: number } {
+  const next = [...transcript, entry];
+  if (next.length <= TRANSCRIPT_LIMIT) return { transcript: next, dropped: 0 };
+  return {
+    transcript: next.slice(next.length - TRANSCRIPT_LIMIT),
+    dropped: next.length - TRANSCRIPT_LIMIT,
+  };
+}
+
+/** Append a finished-or-in-flight tool call to the capped recent-tools trail. */
+function withRecentTool(
+  recentTools: RecentTool[],
+  entry: RecentTool,
+): RecentTool[] {
+  const next = [...recentTools, entry];
+  return next.length > RECENT_TOOLS_LIMIT
+    ? next.slice(next.length - RECENT_TOOLS_LIMIT)
+    : next;
+}
+
+/** Fold a new transcript entry into an agent's `transcript` + `transcriptDropped`. */
+function recordTurn(base: AgentState, entry: TranscriptEntry): Partial<AgentState> {
+  const { transcript, dropped } = withTurn(base.transcript, entry);
+  return { transcript, transcriptDropped: base.transcriptDropped + dropped };
+}
 
 function blankAgent(id: string): AgentState {
   return {
@@ -27,11 +68,14 @@ function blankAgent(id: string): AgentState {
     status: "spawning",
     thought: null,
     activeTools: [],
+    recentTools: [],
     pendingPermissions: [],
     refusedToolCallIds: [],
     exitCode: null,
     exitReason: null,
     promptCount: 0,
+    transcript: [],
+    transcriptDropped: 0,
     lastEventTs: null,
     lastSeq: 0,
   };
@@ -90,11 +134,34 @@ function applyToAgent(prev: AgentState, event: PokeHubEvent): AgentState {
         base.activeTools.length > 0 || base.pendingPermissions.length > 0;
       return {
         ...base,
+        ...recordTurn(base, { seq: event.seq, role: "user", text: event.text }),
         promptCount: base.promptCount + 1,
         status:
           midTurn || prev.status === "spawning" ? prev.status : "thinking",
         thought: null,
         exitReason: null,
+      };
+    }
+
+    case "agent.message": {
+      // The agent's full reply. Capture it in the transcript AND drive the
+      // one-line thought bubble from it (translate no longer emits a separate
+      // prose `agent.thinking`). Same status caution as `agent.thinking`: a
+      // tool in flight or a pending ask outranks "the model is talking".
+      const talking =
+        base.activeTools.length === 0 && base.status !== "blocked";
+      return {
+        ...base,
+        ...recordTurn(base, {
+          seq: event.seq,
+          role: "assistant",
+          text: event.text,
+        }),
+        status: talking ? "thinking" : base.status,
+        // Only let the reply into the bubble when it's actually the headline. A
+        // tool in flight already owns the bubble (`tool.started` blanked it);
+        // don't shove interim prose over the running "Bash".
+        thought: talking ? bubbleLine(event.text) : base.thought,
       };
     }
 
@@ -115,12 +182,25 @@ function applyToAgent(prev: AgentState, event: PokeHubEvent): AgentState {
       const alreadyActive = base.activeTools.some(
         (t) => t.toolCallId === event.toolCallId,
       );
+      // A re-delivered start (snapshot + live overlap) for a call already in the
+      // trail — even one that has since finished — must not add a second row.
+      const alreadyTrailed = base.recentTools.some(
+        (t) => t.toolCallId === event.toolCallId,
+      );
       return {
         ...base,
         status: "working",
         activeTools: alreadyActive
           ? base.activeTools
           : [...base.activeTools, { toolCallId: event.toolCallId, tool: event.tool }],
+        recentTools: alreadyTrailed
+          ? base.recentTools
+          : withRecentTool(base.recentTools, {
+              toolCallId: event.toolCallId,
+              tool: event.tool,
+              target: toolTarget(event.tool, event.input),
+              ok: null,
+            }),
         // Location follows the most recently started tool.
         location: room ?? base.location,
         thought: null,
@@ -139,6 +219,15 @@ function applyToAgent(prev: AgentState, event: PokeHubEvent): AgentState {
       return {
         ...base,
         activeTools,
+        // Record the outcome on the matching recent-tools entry (it may already
+        // have been evicted by the cap — then this is a no-op).
+        recentTools: base.recentTools.some(
+          (t) => t.toolCallId === event.toolCallId,
+        )
+          ? base.recentTools.map((t) =>
+              t.toolCallId === event.toolCallId ? { ...t, ok: event.ok } : t,
+            )
+          : base.recentTools,
         refusedToolCallIds: wasRefused
           ? base.refusedToolCallIds.filter((id) => id !== event.toolCallId)
           : base.refusedToolCallIds,

@@ -98,13 +98,28 @@ export interface ToolFinishedEvent extends EventBase {
   summary?: string;
 }
 
-/** The model is producing reasoning or assistant prose, no tool in flight. */
+/** The model is producing extended-thinking reasoning, no tool in flight. The
+ *  bubble-sized summary is all that is kept — the full reasoning is never
+ *  written to the log. Visible assistant prose is a separate `agent.message`. */
 export interface AgentThinkingEvent extends EventBase {
   kind: "agent.thinking";
   /** One-line thought bubble, if there is text to show. */
   thought?: string;
-  /** `reasoning` = an extended-thinking block; `prose` = visible assistant text. */
+  /** `reasoning` = an extended-thinking block, the only value emitted now.
+   *  `prose` is legacy — visible prose is its own `agent.message` event; old
+   *  logs may still carry an `agent.thinking` with this channel. */
   channel?: "reasoning" | "prose";
+}
+
+/** One complete block of visible assistant prose — the agent's actual reply,
+ *  verbatim. Captured so a multi-turn conversation can be read back in the focus
+ *  view and the journal (finding #2 from the Phase 0 pass test); the reducer
+ *  also derives the one-line thought bubble from it. Extended-thinking blocks
+ *  are NOT carried here — that stays in `agent.thinking`. */
+export interface AgentMessageEvent extends EventBase {
+  kind: "agent.message";
+  /** The assistant's text for this block, verbatim. */
+  text: string;
 }
 
 /** Auto-compaction ran (stream-json `system/compact_boundary`). Carried now so
@@ -146,6 +161,7 @@ export type PokeHubEvent =
   | ToolStartedEvent
   | ToolFinishedEvent
   | AgentThinkingEvent
+  | AgentMessageEvent
   | SessionCompactedEvent
   | PermissionRequestedEvent
   | PermissionResolvedEvent

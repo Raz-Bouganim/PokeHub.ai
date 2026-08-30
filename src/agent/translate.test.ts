@@ -44,13 +44,29 @@ describe("translate — SDK message -> event drafts", () => {
     ]);
   });
 
-  it("turns assistant text into a one-line prose thought", () => {
-    const [draft] = translate(sdkStream[1]!, "a1", "sess-1");
-    expect(draft).toMatchObject({
-      kind: "agent.thinking",
-      thought: "Let me look for the router.",
-      channel: "prose",
-    });
+  it("turns assistant prose into a single agent.message with the FULL text", () => {
+    const drafts = translate(sdkStream[1]!, "a1", "sess-1");
+    // One canonical event per block — the one-line bubble is derived downstream.
+    expect(drafts).toEqual([
+      {
+        kind: "agent.message",
+        source: "agent",
+        agentId: "a1",
+        sessionId: "sess-1",
+        text: "Let me look for the router.\nThen I'll edit it.",
+      },
+    ]);
+  });
+
+  it("does not emit agent.message for an extended-thinking block", () => {
+    const msg = {
+      type: "assistant",
+      session_id: "sess-1",
+      message: { content: [{ type: "thinking", thinking: "hmm.\nok." }] },
+    };
+    expect(translate(msg, "a1", "sess-1").map((d) => d.kind)).toEqual([
+      "agent.thinking",
+    ]);
   });
 
   it("turns an extended-thinking block into a reasoning thought", () => {
@@ -89,7 +105,7 @@ describe("translate — SDK message -> event drafts", () => {
       },
     };
     const drafts = translate(msg, "a1", "sess-1");
-    expect(drafts.map((d) => d.kind)).toEqual(["agent.thinking", "tool.started"]);
+    expect(drafts.map((d) => d.kind)).toEqual(["agent.message", "tool.started"]);
   });
 
   it("turns a tool_result block into tool.finished keyed by the same id", () => {

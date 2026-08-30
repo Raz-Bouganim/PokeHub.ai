@@ -10,6 +10,7 @@
  */
 
 import type { PokeHubEvent } from "../core/events.ts";
+import { bubbleLine } from "../core/text.ts";
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
   ? Omit<T, K>
@@ -91,18 +92,21 @@ export function translate(
             source: "agent",
             agentId,
             sessionId: sid,
-            thought: firstLine(block.thinking),
+            thought: bubbleLine(block.thinking),
             channel: "reasoning",
           });
         }
         if (block.type === "text" && block.text?.trim()) {
+          // One canonical event per prose block: the full text. The reducer
+          // derives the one-line thought bubble from it (`bubbleLine`), so the
+          // log isn't carrying the same text twice. Extended-thinking blocks
+          // above still use `agent.thinking` — that text is not the reply.
           drafts.push({
-            kind: "agent.thinking",
+            kind: "agent.message",
             source: "agent",
             agentId,
             sessionId: sid,
-            thought: firstLine(block.text),
-            channel: "prose",
+            text: block.text.trim(),
           });
         }
         if (block.type === "tool_use" && block.id && block.name) {
@@ -162,9 +166,4 @@ export function translate(
   }
 
   return drafts;
-}
-
-function firstLine(text: string): string {
-  const line = text.trim().split("\n", 1)[0] ?? "";
-  return line.length > 120 ? line.slice(0, 117) + "…" : line;
 }

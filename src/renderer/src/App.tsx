@@ -6,6 +6,7 @@ import { knownClasses } from "../../core/classes.ts";
 import { agentList } from "../../core/selectors.ts";
 import { useWorld } from "./useWorld.ts";
 import { WorldMap } from "./WorldMap.tsx";
+import { AgentFocus } from "./AgentFocus.tsx";
 
 const CLASSES = knownClasses();
 
@@ -147,7 +148,11 @@ export function App() {
       <div className="left">
         <div className="panel map-panel">
           <h2>Map</h2>
-          <WorldMap world={world} />
+          <WorldMap
+            world={world}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+          />
         </div>
 
         <div className="panel">
@@ -194,18 +199,26 @@ export function App() {
         </div>
       </div>
 
-      <div className="panel">
-        <h2>Raw event log</h2>
-        {log.slice(-200).map((e) => (
-          // (agentId, seq) is unique per agent and stable — no array index, or
-          // every row's key shifts on each new event once the log passes 200.
-          <div className="log-line" key={`${e.agentId}-${e.seq}`}>
-            <span className="kind">
-              {String(e.seq).padStart(3, "0")} {e.kind}
-            </span>{" "}
-            {summarize(e)}
-          </div>
-        ))}
+      <div className="right">
+        {selected && (
+          <AgentFocus
+            agent={selected}
+            onClose={() => setSelectedId(null)}
+          />
+        )}
+        <div className="panel raw-log">
+          <h2>Raw event log</h2>
+          {log.slice(-200).map((e) => (
+            // (agentId, seq) is unique per agent and stable — no array index, or
+            // every row's key shifts on each new event once the log passes 200.
+            <div className="log-line" key={`${e.agentId}-${e.seq}`}>
+              <span className="kind">
+                {String(e.seq).padStart(3, "0")} {e.kind}
+              </span>{" "}
+              {summarize(e)}
+            </div>
+          ))}
+        </div>
       </div>
 
       {ask && (
@@ -244,6 +257,8 @@ function summarize(e: PokeHubEvent): string {
       return e.ok ? (e.summary ?? "ok") : `ERROR ${e.summary ?? ""}`;
     case "agent.thinking":
       return e.thought ?? "";
+    case "agent.message":
+      return firstLine(e.text);
     case "agent.prompt":
       return `“${firstLine(e.text)}”`;
     case "agent.turn_finished":
@@ -263,6 +278,8 @@ function summarize(e: PokeHubEvent): string {
   }
 }
 
+/** The literal first line, clipped — the raw log shows what the event actually
+ *  carries, not a prettified form of it (VISION: the raw stream stays faithful). */
 function firstLine(text: string): string {
   const line = text.trim().split("\n", 1)[0] ?? "";
   return line.length > 80 ? `${line.slice(0, 79)}…` : line;

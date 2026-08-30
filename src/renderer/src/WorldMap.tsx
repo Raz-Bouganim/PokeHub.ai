@@ -117,6 +117,8 @@ function renderAgents(
   layer: Container,
   sprites: Map<string, Sprite>,
   world: WorldState,
+  selectedId: string | null,
+  onSelect: (id: string) => void,
 ): void {
   const byLoc = new Map<Location, ReturnType<typeof agentList>>();
   for (const a of agentList(world)) {
@@ -136,6 +138,12 @@ function renderAgents(
       let s = sprites.get(a.id);
       if (!s) {
         s = makeSprite();
+        s.container.eventMode = "static";
+        s.container.cursor = "pointer";
+        // Bound once: a sprite slot is keyed by `a.id` and always represents the
+        // same agent for its whole life, and `onSelect` is a stable wrapper.
+        const id = a.id;
+        s.container.on("pointertap", () => onSelect(id));
         layer.addChild(s.container);
         sprites.set(a.id, s);
       }
@@ -150,6 +158,9 @@ function renderAgents(
       s.body.circle(0, 0, 9).fill(tint);
       if (a.status === "blocked" || a.status === "erroring") {
         s.body.circle(0, 0, 13).stroke({ width: 2, color: tint });
+      }
+      if (a.id === selectedId) {
+        s.body.circle(0, 0, 16).stroke({ width: 1.5, color: 0x9aa0d8, alpha: 0.9 });
       }
 
       s.name.text = a.name;
@@ -169,7 +180,15 @@ function renderAgents(
   }
 }
 
-export function WorldMap({ world }: { world: WorldState }): JSX.Element {
+export function WorldMap({
+  world,
+  selectedId = null,
+  onSelect,
+}: {
+  world: WorldState;
+  selectedId?: string | null;
+  onSelect?: (id: string) => void;
+}): JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null);
   const layerRef = useRef<Container | null>(null);
   const spritesRef = useRef<Map<string, Sprite>>(new Map());
@@ -178,6 +197,12 @@ export function WorldMap({ world }: { world: WorldState }): JSX.Element {
   // world, not the one captured at mount — events can stream in during init().
   const worldRef = useRef(world);
   worldRef.current = world;
+  const selectedIdRef = useRef(selectedId);
+  selectedIdRef.current = selectedId;
+  // Stable indirection so the redraw effect doesn't need `onSelect` as a dep.
+  const selectRef = useRef<(id: string) => void>(() => {});
+  selectRef.current = (id) => onSelect?.(id);
+  const select = (id: string) => selectRef.current(id);
 
   // Create the Pixi app once. init() is async, so a fast unmount (React
   // StrictMode double-invoke, HMR) can fire cleanup before it resolves —
@@ -218,7 +243,13 @@ export function WorldMap({ world }: { world: WorldState }): JSX.Element {
         const layer = new Container();
         app.stage.addChild(layer);
         layerRef.current = layer;
-        renderAgents(layer, spritesRef.current, worldRef.current);
+        renderAgents(
+          layer,
+          spritesRef.current,
+          worldRef.current,
+          selectedIdRef.current,
+          select,
+        );
       })
       .catch((err: unknown) => {
         // A dead Pixi panel should say why, not sit blank.
@@ -236,12 +267,20 @@ export function WorldMap({ world }: { world: WorldState }): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Redraw sprites whenever the world changes.
+  // Redraw sprites whenever the world — or the selection highlight — changes.
   useEffect(() => {
     if (layerRef.current) {
-      renderAgents(layerRef.current, spritesRef.current, world);
+      renderAgents(
+        layerRef.current,
+        spritesRef.current,
+        world,
+        selectedId,
+        select,
+      );
     }
-  }, [world]);
+    // `select` is a stable wrapper over a ref; not a dep.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [world, selectedId]);
 
   return (
     <div className="map-host" ref={hostRef}>

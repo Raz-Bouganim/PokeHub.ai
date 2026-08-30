@@ -7,28 +7,28 @@ The spec is `VISION.md`. The always-on rules are `CLAUDE.md`.
 
 **Phase 1 — Legibility.** Goal for the phase: full room set for one project, encounter-style
 permission dialog, journal with diffs, raw-stream toggle — and it must genuinely beat a
-terminal for a *single* agent. Follow-up interaction landed 2026-08-30 and works live.
+terminal for a *single* agent. Follow-up interaction + full-text capture + agent-focus view
+all landed 2026-08-30 and were verified live.
 
-**Start here — capture full assistant text + agent-focus view (finding #2 from the pass test).**
-`translate` only keeps `firstLine(text)` for the thought bubble; the full assistant reply is
-stored nowhere, so a multi-turn conversation with an agent (now possible via follow-up) can't
-actually be read back.
-- Add a fuller event carrying the whole assistant text — either a new `agent.message` kind or
-  widen `AgentThinkingEvent` with a `full`/`body` field. `translate`'s `assistant` case (the
-  `block.type === "text"` branch) is where the text is dropped; keep the one-line `thought`
-  for the bubble *and* the full body.
-- Reducer: store the last assistant message (and/or a short transcript) on `AgentState`.
-- Build the agent-focus view — VISION's "one agent, full detail" zoom. Clicking a sprite / the
-  already-existing agent-row selection should open a panel with: the conversation so far
-  (user turns are `agent.prompt` events, `text` field; assistant turns are the new full-text
-  events), current tools, HP-bar placeholder. The row-selection state (`selectedId` in
-  `App.tsx`) already exists and drives the composer — reuse it.
+**Start here — per-agent raw log.** The RAW EVENT LOG panel in `App.tsx` interleaves every
+agent and each agent's `seq` restarts at 001, so a single agent can't be followed. Add:
+- A per-`agentId` filter — reuse `selectedId` (already drives the composer and the focus
+  panel): when an agent is selected, offer "only this agent" for the raw log too. Every event
+  carries `e.agentId` already; the list is `useWorld().log`.
+- A stable colour per agent (hash `agentId` → hue) on both the raw-log rows and, ideally, the
+  sprite tint accent — so the same agent reads the same everywhere.
+- Keep the interleaved "all" view as the default; the filter is a toggle, not a replacement.
+The focus panel (`AgentFocus.tsx`) is the place to surface the filtered view, or a segmented
+control on the raw-log panel header — either is fine.
 
 Then, in rough priority order (all Phase 1):
-- **Per-agent raw log.** The RAW EVENT LOG interleaves every agent and each agent's `seq`
-  restarts at 001, so you can't follow one. Add a per-agent filter + colour. Every event
-  already carries `agentId`. (`App.tsx` already shows `promptCount` as "N turns" per row.)
-- Journal with diffs (files read vs modified visually distinct), full room set polish.
+- **Journal with diffs.** Files *read* vs *modified* visually distinct (VISION "Legibility
+  features"). The `recentTools` trail on `AgentState` (added this session, `RecentTool[]`,
+  cap 8) is the seed — it already carries `tool` + `target` + `ok`; the journal is the
+  unbounded, grouped-by-turn version with `+N / -M` from `tool.finished.summary`.
+- Full room-set polish, encounter-dialog polish.
+- Swap the hand-rolled `Markdown.tsx` for `react-markdown` **only if** the transcript becomes
+  central and the mini-renderer's gaps (nested lists, task lists) start to bite. Not now.
 - UI refactor / real art is **Phase 3**, not now — acknowledged and deferred on purpose.
 
 Reference notes:
@@ -40,12 +40,27 @@ Reference notes:
   self-exit after one turn); it does not exercise follow-up.
 - `npm run dev` also serves the renderer at `localhost:5173`; it survives a missing preload
   bridge (empty world, no crash), so the map is eyeballable in a plain browser.
+- `src/core/text.ts` holds the shared pure text helpers: `bubbleLine()` (markdown-aware
+  one-liner for the bubble) and `toolTarget()` (short "what it touched" label). The raw-log
+  panel deliberately does *not* use `bubbleLine` — it has its own literal `firstLine` so the
+  log stays faithful.
 - Restart `npm run dev` fully between runs — StrictMode remount + Pixi async init is fragile.
 - Renderer main chunk is ~1.15 MB now that Pixi is bundled (past Vite's 500 kB warning).
   Code-split before Phase 4 packaging; ignore until then.
 
 ## Done
 
+- **2026-08-30** — **Full assistant-text capture + agent-focus view** (Phase 1, finding #2
+  from the pass test). Verified live with a Scout on the PokeHub repo across 4 turns. New
+  `agent.message` event carries the verbatim reply; `translate` emits **one** per prose block
+  (no more paired `agent.thinking` prose — the reducer derives the bubble via `bubbleLine`).
+  `AgentState` gained `transcript` (`TranscriptEntry[]`, cap 100 + `transcriptDropped`
+  counter), `recentTools` (`RecentTool[]`, cap 8, survives `tool.finished`). New
+  `AgentFocus.tsx` panel: conversation (user turns rendered verbatim, assistant turns through
+  a new dependency-free `Markdown.tsx`), recent-tools trail with ◌/✓/✕, HP-bar placeholder.
+  Sprites are clickable (`pointertap` → select) with a selection ring. New shared
+  `src/core/text.ts` (`bubbleLine`, `toolTarget`). 96 tests (was 68). Two review passes: 3
+  cleanup findings then 5 more (one real bug — a Markdown infinite loop), all fixed.
 - **2026-08-30** — **Follow-up interaction — resume a spawned agent with another turn.**
   Verified live: ran two agents via `npm run dev` and re-prompted each one. New events
   `agent.prompt` (source `user`, carries turn text) and `agent.turn_finished`; `translate`
@@ -152,6 +167,25 @@ Reference notes:
   world-state lookup) so the spawn→first-event gap can't spawn a duplicate.
 - **2026-08-30** — Main `stop()`s every agent on window-close / all-closed — needed now that
   the session log is held open across turns and only flushes on `stop()`.
+- **2026-08-30** — **One `agent.message` per prose block, bubble derived downstream** — not a
+  paired `agent.thinking` + `agent.message` for the same text. Two overlapping events in an
+  append-only log means keeping two paths in sync and doubling the text on disk; the reducer
+  derives the one-liner with `bubbleLine`. `agent.thinking` now only ever carries extended
+  reasoning (`channel: "reasoning"`); `"prose"` is a legacy type value old logs may still hold.
+- **2026-08-30** — `agent.message` drives the bubble **only when `talking`** (no tool in
+  flight, not blocked) — a running tool already owns the bubble and interim prose must not
+  steal it. The transcript is captured regardless.
+- **2026-08-30** — Transcript + recent-tools are **capped on `AgentState`** (100 / 8) with the
+  overflow still in the log; `transcriptDropped` is a real counter so the focus view can say
+  "N earlier turns" honestly instead of guessing from `length >= cap` (which lies at exactly
+  the cap).
+- **2026-08-30** — `bubbleLine` lives in `src/core/text.ts` and is markdown-aware (skips
+  headings/fences, strips inline syntax, first *sentence* not first line). The **raw-log
+  panel keeps its own literal `firstLine`** — the escape-hatch log must show what the event
+  actually carries, not a prettified form (VISION).
+- **2026-08-30** — Hand-rolled `Markdown.tsx` (no dependency, no `dangerouslySetInnerHTML`)
+  rather than `react-markdown`. Real UI polish is Phase 3; a ~200-line renderer covering
+  headings / lists / code / tables is enough to beat reading raw source. Swap later if needed.
 
 ## Gotchas
 
@@ -202,9 +236,21 @@ _Things learned the hard way. One line each — what broke, and what fixed it._
   effect threw on `.onAgentEvent` and React unmounted everything, so even a Pixi error was
   invisible. `useWorld` + `App` now no-op without the bridge; the map renders in a plain
   browser too, which is how the CSP bug was finally caught (`npm run dev` → localhost:5173).
-- **The thought bubble only shows the first line of an agent's reply** — `translate` records
-  `firstLine(text)` for `agent.thinking`. The full assistant response is never captured
-  anywhere. Phase 1 needs an agent-focus view + a fuller text event.
+- **A markdown block parser that doesn't guarantee forward progress infinite-loops.**
+  `Markdown.tsx`'s paragraph branch broke out of its gather loop on a line that `isBlockStart`
+  recognised (e.g. a stray `| x` that failed the table check) **without** advancing `i`, so
+  the outer `while` re-processed it forever and froze the renderer. Fix: the paragraph branch
+  now always consumes the current line first (`buf = [t]; i++`). Any hand-rolled line parser
+  needs an "i always advances" invariant.
+- **`bubbleLine`'s first-sentence cut fired on abbreviations** — `"e.g. the router…"` bubbled
+  as just `"e.g."`. Fix: `firstSentence()` skips a `.` that follows a known abbreviation
+  (`e.g.` `i.e.` `vs.` `No.` …), sits on a digit, or lands before char 12 (fragment).
+- **Re-delivered `tool.started` after its `tool.finished` double-appended to `recentTools`** —
+  `alreadyActive` was false (the id left `activeTools` on finish), so a second row with a
+  duplicate `toolCallId` appeared → React key collision in `AgentFocus`. Fix: also check
+  `recentTools` for the id (`alreadyTrailed`) before appending.
+- **`exactOptionalPropertyTypes` + a non-null-asserted `.length`** — `toolTarget()` returns
+  `string | null`; `expect(toolTarget(...).length)` needs `!` or a guard in the test.
 - **TS narrows a closure-mutated `let` to a stale literal.** `let lifecycle: "running" |
   "idle" | "exited"` is only ever reassigned inside the `emit` closure; TS's control-flow
   analysis doesn't see that, so a later `lifecycle === "exited"` after an earlier guard
@@ -224,6 +270,8 @@ _Things learned the hard way. One line each — what broke, and what fixed it._
   nowhere (same root cause as the thought-bubble line above); (c) the RAW EVENT LOG
   interleaves all agents and each agent's `seq` restarts at 001, so a single agent can't be
   followed — needs a per-`agentId` filter + colour; (d) UI is rough (expected — Phase 3).
+  _(a) and (b) fixed 2026-08-30 — follow-up interaction + full-text capture / focus view.
+  (c) is the current "Next up". (d) stays Phase 3._
 
 ## VISION.md needs updating
 

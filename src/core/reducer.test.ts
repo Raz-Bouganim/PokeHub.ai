@@ -5,7 +5,7 @@ import type { PokeHubEvent } from "./events.ts";
 import { parseLog } from "./log.ts";
 import { reduce, replay } from "./reducer.ts";
 import { isStalled, needsAttention } from "./selectors.ts";
-import { initialWorld } from "./world.ts";
+import { initialWorld, TRANSCRIPT_LIMIT } from "./world.ts";
 
 const fixture = fileURLToPath(
   new URL("./__fixtures__/one-agent-two-rooms.ndjson", import.meta.url),
@@ -312,6 +312,171 @@ describe("reducer — follow-up interaction (session resume)", () => {
     const world = replay(stream.slice(0, 8), initialWorld());
     const wayLater = Date.parse("2026-08-29T14:00:00.000Z");
     expect(isStalled(world.agents["F"]!, wayLater)).toBe(false);
+  });
+});
+
+describe("reducer — transcript capture (agent-focus view)", () => {
+  const stream: PokeHubEvent[] = [
+    ev({ seq: 1, agentId: "T", kind: "agent.spawned", name: "Tam", agentClass: "Builder", cwd: "/t" }),
+    ev({ seq: 2, agentId: "T", source: "user", kind: "agent.prompt", text: "add a /healthz route" }),
+    ev({ seq: 3, agentId: "T", kind: "agent.session_started", sessionId: "sess-t" }),
+    ev({ seq: 4, agentId: "T", kind: "agent.thinking", thought: "wiring it", channel: "prose" }),
+    ev({ seq: 5, agentId: "T", kind: "agent.message", text: "I'll wire it into the router.\nOne sec." }),
+    ev({ seq: 6, agentId: "T", kind: "tool.started", toolCallId: "t1", tool: "Edit", input: {} }),
+    ev({ seq: 7, agentId: "T", kind: "tool.finished", toolCallId: "t1", ok: true }),
+    ev({ seq: 8, agentId: "T", kind: "agent.message", text: "Done — added at /healthz." }),
+    ev({ seq: 9, agentId: "T", kind: "agent.turn_finished" }),
+    ev({ seq: 10, agentId: "T", source: "user", kind: "agent.prompt", text: "now a test" }),
+  ];
+
+  it("folds user prompts and assistant messages into one ordered conversation", () => {
+    const world = replay(stream, initialWorld());
+    expect(world.agents["T"]!.transcript).toEqual([
+      { seq: 2, role: "user", text: "add a /healthz route" },
+      { seq: 5, role: "assistant", text: "I'll wire it into the router.\nOne sec." },
+      { seq: 8, role: "assistant", text: "Done — added at /healthz." },
+      { seq: 10, role: "user", text: "now a test" },
+    ]);
+  });
+
+  it("agent.message captures the turn and drives the one-line bubble", () => {
+    const before = replay(stream.slice(0, 7), initialWorld()).agents["T"]!;
+    const after = replay(stream.slice(0, 8), initialWorld()).agents["T"]!;
+    expect(after.location).toBe(before.location);
+    expect(after.transcript).toHaveLength(before.transcript.length + 1);
+    // the bubble now shows the first line of the full reply
+    expect(after.thought).toBe("Done — added at /healthz.");
+    expect(after.status).toBe("thinking");
+  });
+
+  it("agent.message does not override a tool in flight or a pending ask", () => {
+    // seq 6 = tool.started Edit (no finish) -> working, in the Forge
+    const midTool: PokeHubEvent[] = [
+      ...stream.slice(0, 6),
+      ev({ seq: 7, agentId: "T", kind: "agent.message", text: "editing now" }),
+    ];
+    const agent = replay(midTool, initialWorld()).agents["T"]!;
+    expect(agent.status).toBe("working");
+    expect(agent.location).toBe("forge");
+    // the running tool keeps the bubble — interim prose does not steal it
+    expect(agent.thought).toBeNull();
+    // ...but the turn is still captured in the transcript
+    expect(agent.transcript.at(-1)).toMatchObject({
+      role: "assistant",
+      text: "editing now",
+    });
+  });
+
+  it("a stray agent.message after exit is ignored", () => {
+    const world = replay(
+      [
+        ev({ seq: 1, agentId: "X", kind: "agent.spawned", name: "X", agentClass: "Scout", cwd: "/x" }),
+        ev({ seq: 2, agentId: "X", kind: "agent.exited", code: 0 }),
+        ev({ seq: 3, agentId: "X", kind: "agent.message", text: "still here?" }),
+      ],
+      initialWorld(),
+    );
+    expect(world.agents["X"]!.transcript).toEqual([]);
+  });
+
+  it("keeps only the newest TRANSCRIPT_LIMIT turns; older ones stay in the log", () => {
+    const many: PokeHubEvent[] = [
+      ev({ seq: 1, agentId: "L", kind: "agent.spawned", name: "L", agentClass: "Builder", cwd: "/l" }),
+    ];
+    const turns = TRANSCRIPT_LIMIT + 20;
+    for (let i = 0; i < turns; i++) {
+      many.push(
+        ev({ seq: i + 2, agentId: "L", kind: "agent.message", text: `line ${i}` }),
+      );
+    }
+    const agent = replay(many, initialWorld()).agents["L"]!;
+    expect(agent.transcript).toHaveLength(TRANSCRIPT_LIMIT);
+    expect(agent.transcript[0]!.text).toBe(`line ${turns - TRANSCRIPT_LIMIT}`);
+    expect(agent.transcript.at(-1)!.text).toBe(`line ${turns - 1}`);
+    expect(agent.transcriptDropped).toBe(turns - TRANSCRIPT_LIMIT);
+  });
+
+  it("transcriptDropped stays 0 at exactly the cap — nothing has fallen off", () => {
+    const exactly: PokeHubEvent[] = [
+      ev({ seq: 1, agentId: "E", kind: "agent.spawned", name: "E", agentClass: "Builder", cwd: "/e" }),
+    ];
+    for (let i = 0; i < TRANSCRIPT_LIMIT; i++) {
+      exactly.push(ev({ seq: i + 2, agentId: "E", kind: "agent.message", text: `m${i}` }));
+    }
+    const agent = replay(exactly, initialWorld()).agents["E"]!;
+    expect(agent.transcript).toHaveLength(TRANSCRIPT_LIMIT);
+    expect(agent.transcriptDropped).toBe(0);
+  });
+
+  it("transcript capture is per-agent idempotent on replay", () => {
+    const once = replay(stream, initialWorld());
+    const twice = replay(stream, once);
+    expect(twice).toEqual(once);
+  });
+});
+
+describe("reducer — recent-tools trail (focus view)", () => {
+  const stream: PokeHubEvent[] = [
+    ev({ seq: 1, agentId: "W", kind: "agent.spawned", name: "Wren", agentClass: "Builder", cwd: "/w" }),
+    ev({ seq: 2, agentId: "W", kind: "tool.started", toolCallId: "w1", tool: "Read", input: { file_path: "/w/src/auth.ts" } }),
+    ev({ seq: 3, agentId: "W", kind: "tool.finished", toolCallId: "w1", ok: true }),
+    ev({ seq: 4, agentId: "W", kind: "tool.started", toolCallId: "w2", tool: "Bash", input: { command: "npm test" } }),
+    ev({ seq: 5, agentId: "W", kind: "tool.finished", toolCallId: "w2", ok: false }),
+    ev({ seq: 6, agentId: "W", kind: "tool.started", toolCallId: "w3", tool: "Edit", input: { file_path: "/w/src/auth.ts" } }),
+  ];
+
+  it("keeps tool calls after they finish, with target and outcome", () => {
+    const trail = replay(stream, initialWorld()).agents["W"]!.recentTools;
+    expect(trail).toEqual([
+      { toolCallId: "w1", tool: "Read", target: "auth.ts", ok: true },
+      { toolCallId: "w2", tool: "Bash", target: "npm test", ok: false },
+      { toolCallId: "w3", tool: "Edit", target: "auth.ts", ok: null },
+    ]);
+  });
+
+  it("an in-flight call shows ok: null until its tool.finished lands", () => {
+    const mid = replay(stream.slice(0, 4), initialWorld()).agents["W"]!;
+    expect(mid.recentTools.at(-1)).toMatchObject({ tool: "Bash", ok: null });
+  });
+
+  it("is bounded — the oldest calls fall off, still in the log", () => {
+    const many: PokeHubEvent[] = [
+      ev({ seq: 1, agentId: "M", kind: "agent.spawned", name: "M", agentClass: "Builder", cwd: "/m" }),
+    ];
+    for (let i = 0; i < 20; i++) {
+      many.push(ev({ seq: i + 2, agentId: "M", kind: "tool.started", toolCallId: `t${i}`, tool: "Read", input: {} }));
+    }
+    const trail = replay(many, initialWorld()).agents["M"]!.recentTools;
+    expect(trail.length).toBeLessThanOrEqual(8);
+    expect(trail.at(-1)!.toolCallId).toBe("t19");
+  });
+
+  it("a re-delivered tool.started (even post-finish) does not add a second row", () => {
+    const trail = replay(
+      [
+        ...stream.slice(0, 3), // w1 started + finished
+        ev({ seq: 7, agentId: "W", kind: "tool.started", toolCallId: "w1", tool: "Read", input: { file_path: "/w/src/auth.ts" } }),
+      ],
+      initialWorld(),
+    ).agents["W"]!.recentTools;
+    expect(trail.filter((t) => t.toolCallId === "w1")).toHaveLength(1);
+    expect(trail[0]).toMatchObject({ toolCallId: "w1", ok: true });
+  });
+
+  it("a late tool.finished for an evicted call is a harmless no-op", () => {
+    const trail = replay(
+      [
+        ev({ seq: 1, agentId: "N", kind: "agent.spawned", name: "N", agentClass: "Builder", cwd: "/n" }),
+        ev({ seq: 2, agentId: "N", kind: "tool.started", toolCallId: "ghost", tool: "Read", input: {} }),
+        ...Array.from({ length: 10 }, (_, i) =>
+          ev({ seq: i + 3, agentId: "N", kind: "tool.started", toolCallId: `x${i}`, tool: "Glob", input: {} }),
+        ),
+        ev({ seq: 13, agentId: "N", kind: "tool.finished", toolCallId: "ghost", ok: true }),
+      ],
+      initialWorld(),
+    ).agents["N"]!.recentTools;
+    expect(trail.some((t) => t.toolCallId === "ghost")).toBe(false);
+    expect(trail.length).toBeLessThanOrEqual(8);
   });
 });
 
