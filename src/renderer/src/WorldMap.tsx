@@ -47,6 +47,7 @@ const STATUS_TINT: Record<AgentStatus, number> = {
   working: 0x7fd7a5,
   blocked: 0xffcf5c,
   erroring: 0xff7a7a,
+  idle: 0x6f77b0,
   exited: 0x55566f,
 };
 
@@ -80,6 +81,7 @@ function bubbleText(a: ReturnType<typeof agentList>[number]): string {
   if (a.pendingPermissions[0]) return `⏸ ${a.pendingPermissions[0].tool}`;
   if (a.activeTools[0]) return a.activeTools[0].tool;
   if (a.exitReason) return a.exitReason;
+  if (a.status === "idle") return "· idle ·";
   return "";
 }
 
@@ -140,7 +142,8 @@ function renderAgents(
       // Snap to truth. No tween — see file header.
       s.container.x = room.x + 34 + col * 74;
       s.container.y = room.y + 52 + rowN * 48;
-      s.container.alpha = a.status === "exited" ? 0.4 : 1;
+      s.container.alpha =
+        a.status === "exited" ? 0.4 : a.status === "idle" ? 0.7 : 1;
 
       const tint = STATUS_TINT[a.status];
       s.body.clear();

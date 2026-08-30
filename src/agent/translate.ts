@@ -138,14 +138,25 @@ export function translate(
 
     case "result": {
       const errored = msg.subtype !== undefined && msg.subtype !== "success";
-      drafts.push({
-        kind: "agent.exited",
-        source: "agent",
-        agentId,
-        sessionId: sid,
-        code: errored || msg.is_error ? 1 : 0,
-        ...(errored ? { reason: msg.subtype } : {}),
-      });
+      if (errored || msg.is_error) {
+        drafts.push({
+          kind: "agent.exited",
+          source: "agent",
+          agentId,
+          sessionId: sid,
+          code: 1,
+          ...(errored ? { reason: msg.subtype } : {}),
+        });
+      } else {
+        // A clean turn end is NOT an exit: the session can be resumed with a
+        // follow-up. `spawnAgent` keeps the log open and the agent idle.
+        drafts.push({
+          kind: "agent.turn_finished",
+          source: "agent",
+          agentId,
+          sessionId: sid,
+        });
+      }
       break;
     }
   }

@@ -106,14 +106,13 @@ describe("translate — SDK message -> event drafts", () => {
     expect(translate(errResult, "a1", "s")[0]).toMatchObject({ ok: false });
   });
 
-  it("emits a clean agent.exited from a success result frame", () => {
+  it("emits agent.turn_finished (not exited) from a success result frame", () => {
     const [draft] = translate(sdkStream[4]!, "a1", "sess-1");
     expect(draft).toEqual({
-      kind: "agent.exited",
+      kind: "agent.turn_finished",
       source: "agent",
       agentId: "a1",
       sessionId: "sess-1",
-      code: 0,
     });
   });
 
@@ -152,7 +151,7 @@ describe("translate — SDK message -> event drafts", () => {
 });
 
 describe("translate + reduce — the full pipe on a recorded stream", () => {
-  it("drives an agent from spawn to exit, walking into the Library", () => {
+  it("drives an agent from spawn to idle, walking into the Library", () => {
     const drafts = sdkStream.flatMap((m) => translate(m, "a1", null));
     const events = stamp(drafts);
 
@@ -165,7 +164,8 @@ describe("translate + reduce — the full pipe on a recorded stream", () => {
 
     const agent = world.agents["a1"]!;
     expect(agent.sessionId).toBe("sess-1");
-    expect(agent.status).toBe("exited");
+    // A clean turn end leaves the agent idle and resumable, not exited.
+    expect(agent.status).toBe("idle");
     expect(locations).toContain("library");
   });
 });

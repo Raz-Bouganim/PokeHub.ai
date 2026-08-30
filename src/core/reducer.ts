@@ -31,6 +31,7 @@ function blankAgent(id: string): AgentState {
     refusedToolCallIds: [],
     exitCode: null,
     exitReason: null,
+    promptCount: 0,
     lastEventTs: null,
     lastSeq: 0,
   };
@@ -79,6 +80,35 @@ function applyToAgent(prev: AgentState, event: PokeHubEvent): AgentState {
 
     case "agent.session_started":
       return { ...base, sessionId: event.sessionId };
+
+    case "agent.prompt": {
+      // A follow-up turn: revive an idle sprite and count the turn. The `exited`
+      // guard above already blocks prompts to a finished agent. Don't downgrade
+      // status while the session still shows work in flight (a prompt landing
+      // out of order on replay) or before it exists ("spawning").
+      const midTurn =
+        base.activeTools.length > 0 || base.pendingPermissions.length > 0;
+      return {
+        ...base,
+        promptCount: base.promptCount + 1,
+        status:
+          midTurn || prev.status === "spawning" ? prev.status : "thinking",
+        thought: null,
+        exitReason: null,
+      };
+    }
+
+    case "agent.turn_finished":
+      // The turn is done but the session is resumable — idle, not gone. Keep
+      // `thought` so the last thing it said stays in the bubble while it waits.
+      return {
+        ...base,
+        status: "idle",
+        location: "route",
+        activeTools: [],
+        pendingPermissions: [],
+        refusedToolCallIds: [],
+      };
 
     case "tool.started": {
       const room = roomForTool(event.tool, event.input);

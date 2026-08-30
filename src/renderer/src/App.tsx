@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PokeHubEvent } from "../../core/events.ts";
 import type { PermissionAskEnvelope } from "../../shared/ipc.ts";
 import type { PermissionDecision } from "../../shared/permissions.ts";
@@ -17,6 +17,13 @@ export function App() {
   const [prompt, setPrompt] = useState("");
   const [askQueue, setAskQueue] = useState<PermissionAskEnvelope[]>([]);
   const [busy, setBusy] = useState(false);
+  /** When set, the composer sends a follow-up turn to this agent instead of
+   *  spawning a new one. */
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  // Re-entry guard: `busy` state only blocks re-entry after a re-render, which
+  // can lose the race with a genuine double-click. This flips synchronously.
+  const sending = useRef(false);
 
   useEffect(() => {
     if (!window.pokehub) return;
@@ -26,13 +33,43 @@ export function App() {
     );
   }, []);
 
-  const spawn = async () => {
-    if (!cwd || !prompt) return;
+  const selected = selectedId ? world.agents[selectedId] : undefined;
+  // Follow-up mode the moment an agent is selected — even before its
+  // `agent.spawned` event has been reduced (main already holds the handle), so a
+  // send in that gap resumes the session instead of spawning a second agent.
+  // A known-exited agent can't take another turn, so fall back to spawning.
+  const followMode = selectedId !== null && selected?.status !== "exited";
+
+  const send = async () => {
+    if (!prompt.trim() || sending.current) return;
+    sending.current = true;
+    setNotice(null);
     setBusy(true);
     try {
-      await window.pokehub.spawnAgent({ name, agentClass, cwd, prompt });
+      if (followMode && selectedId) {
+        const res = await window.pokehub.followUpAgent({
+          agentId: selectedId,
+          text: prompt,
+        });
+        if (res.ok) setPrompt("");
+        else setNotice(res.reason ?? "the follow-up was rejected");
+        return;
+      }
+      if (!cwd) {
+        setNotice("a repo path is required to spawn an agent");
+        return;
+      }
+      const { agentId } = await window.pokehub.spawnAgent({
+        name,
+        agentClass,
+        cwd,
+        prompt,
+      });
       setPrompt("");
+      // Target the new agent so the next turn continues its session.
+      setSelectedId(agentId);
     } finally {
+      sending.current = false;
       setBusy(false);
     }
   };
@@ -45,12 +82,29 @@ export function App() {
   };
 
   const ask = askQueue[0];
+  const targetName = selected?.name ?? "agent";
+  const sendLabel = busy
+    ? followMode
+      ? "sending…"
+      : "spawning…"
+    : followMode
+      ? `send to ${targetName}`
+      : "spawn agent";
 
   return (
     <div className="app">
       <div className="bar">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="name" />
-        <select value={agentClass} onChange={(e) => setAgentClass(e.target.value)}>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="name"
+          disabled={followMode}
+        />
+        <select
+          value={agentClass}
+          onChange={(e) => setAgentClass(e.target.value)}
+          disabled={followMode}
+        >
           {CLASSES.map((c) => (
             <option key={c} value={c}>
               {c}
@@ -62,16 +116,33 @@ export function App() {
           onChange={(e) => setCwd(e.target.value)}
           placeholder="/absolute/repo/path"
           style={{ width: 260 }}
+          disabled={followMode}
         />
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder="task for the agent"
+          placeholder={
+            followMode ? `follow-up turn for ${targetName}…` : "task for the agent"
+          }
         />
-        <button onClick={spawn} disabled={busy}>
-          {busy ? "spawning…" : "spawn agent"}
+        <button onClick={send} disabled={busy}>
+          {sendLabel}
         </button>
+        {selectedId && (
+          <button onClick={() => setSelectedId(null)} title="compose a new agent">
+            + new
+          </button>
+        )}
       </div>
+
+      {(notice || (selected && selected.status === "exited")) && (
+        <div className="bar" style={{ marginTop: -4 }}>
+          <span style={{ color: "#ffcf5c" }}>
+            {notice ??
+              `${selected!.name} has exited — sending will spawn a new agent`}
+          </span>
+        </div>
+      )}
 
       <div className="left">
         <div className="panel map-panel">
@@ -84,16 +155,24 @@ export function App() {
             World — {agentList(world).length} agents · seq {world.maxSeqSeen}
           </h2>
           {agentList(world).map((a) => (
-            <div className="agent" key={a.id}>
+            <div
+              className={`agent${a.id === selectedId ? " selected" : ""}`}
+              key={a.id}
+              onClick={() => setSelectedId(a.id)}
+            >
               <strong>{a.name}</strong> <span>({a.agentClass})</span>
               {" — "}
               <span className="room">{a.location}</span>
               {" · "}
               <span className={`status-${a.status}`}>{a.status}</span>
+              {a.promptCount > 1 && <span> · {a.promptCount} turns</span>}
               {a.status !== "exited" && (
                 <button
                   style={{ marginLeft: 8, padding: "1px 8px" }}
-                  onClick={() => window.pokehub.stopAgent(a.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.pokehub.stopAgent(a.id);
+                  }}
                 >
                   stop
                 </button>
@@ -102,6 +181,7 @@ export function App() {
                 <div>tools: {a.activeTools.map((t) => t.tool).join(", ")}</div>
               )}
               {a.thought && <div>💭 {a.thought}</div>}
+              {a.status === "idle" && <div>✓ idle — send a follow-up turn</div>}
               {a.pendingPermissions[0] && (
                 <div>⏸ awaiting: {a.pendingPermissions[0].tool}</div>
               )}
@@ -164,6 +244,10 @@ function summarize(e: PokeHubEvent): string {
       return e.ok ? (e.summary ?? "ok") : `ERROR ${e.summary ?? ""}`;
     case "agent.thinking":
       return e.thought ?? "";
+    case "agent.prompt":
+      return `“${firstLine(e.text)}”`;
+    case "agent.turn_finished":
+      return "idle — awaiting follow-up";
     case "session.compacted":
       return e.trigger ?? "";
     case "permission.requested":
@@ -177,4 +261,9 @@ function summarize(e: PokeHubEvent): string {
     default:
       return "";
   }
+}
+
+function firstLine(text: string): string {
+  const line = text.trim().split("\n", 1)[0] ?? "";
+  return line.length > 80 ? `${line.slice(0, 79)}…` : line;
 }

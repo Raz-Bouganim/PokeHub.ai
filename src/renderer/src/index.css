@@ -129,6 +129,16 @@ button:hover {
   border-radius: 4px;
   padding: 8px;
   margin-bottom: 8px;
+  cursor: pointer;
+}
+
+.agent:hover {
+  border-color: #3d3f66;
+}
+
+.agent.selected {
+  border-color: #6b6ecb;
+  background: #1b1c34;
 }
 
 .agent .room {
@@ -141,6 +151,16 @@ button:hover {
 
 .agent .status-erroring {
   color: #ff7a7a;
+}
+
+.agent .status-idle {
+  color: #8f97d8;
+}
+
+.bar input:disabled,
+.bar textarea:disabled,
+.bar select:disabled {
+  opacity: 0.4;
 }
 
 .log-line {

@@ -18,6 +18,8 @@ import { spawnAgent, type AgentHandle } from "../agent/session.ts";
 import type { PermissionDecision } from "../shared/permissions.ts";
 import {
   IPC,
+  type FollowUpRequest,
+  type FollowUpResult,
   type PermissionAnswer,
   type SpawnRequest,
   type SpawnResult,
@@ -91,8 +93,10 @@ function createWindow(): void {
   });
 
   win.on("closed", () => {
-    // No renderer to answer encounters any more — fail them closed.
+    // No renderer to answer encounters any more — fail them closed and end the
+    // agents (also flushes each session log cleanly).
     resolveAllAsks("refuse");
+    for (const handle of agents.values()) handle.stop();
     if (mainWindow === win) mainWindow = null;
   });
 
@@ -176,6 +180,17 @@ app.whenReady().then(() => {
     agents.get(req.agentId)?.stop();
   });
 
+  ipcMain.handle(
+    IPC.followUpAgent,
+    async (_evt, req: FollowUpRequest): Promise<FollowUpResult> => {
+      const handle = agents.get(req.agentId);
+      if (!handle) return { ok: false, reason: "unknown agent" };
+      const text = req.text.trim();
+      if (!text) return { ok: false, reason: "empty message" };
+      return handle.followUp(text);
+    },
+  );
+
   ipcMain.handle(IPC.worldSnapshot, (): PokeHubEvent[] => {
     const all: PokeHubEvent[] = [];
     for (const handle of agents.values()) {
@@ -196,6 +211,7 @@ app.whenReady().then(() => {
 
 app.on("window-all-closed", () => {
   resolveAllAsks("refuse");
+  for (const handle of agents.values()) handle.stop();
   if (process.platform !== "darwin") app.quit();
 });
 

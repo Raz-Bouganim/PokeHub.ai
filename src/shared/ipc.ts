@@ -35,11 +35,26 @@ export interface StopAgentRequest {
   agentId: string;
 }
 
+/** Another user turn for a live or idle agent — the composer targeting a
+ *  selected sprite instead of spawning. */
+export interface FollowUpRequest {
+  agentId: string;
+  text: string;
+}
+
+export interface FollowUpResult {
+  ok: boolean;
+  /** Why the follow-up was rejected, when `ok` is false. */
+  reason?: string;
+}
+
 export const IPC = {
   /** renderer -> main, invoke */
   spawnAgent: "agent:spawn",
   /** renderer -> main, send: StopAgentRequest */
   stopAgent: "agent:stop",
+  /** renderer -> main, invoke: FollowUpRequest -> FollowUpResult */
+  followUpAgent: "agent:followup",
   /** renderer -> main, invoke: returns every event from every known session log */
   worldSnapshot: "world:snapshot",
   /** main -> renderer, send: one PokeHubEvent */
@@ -59,6 +74,8 @@ export const IPC = {
 export interface PokeHubBridge {
   spawnAgent(req: SpawnRequest): Promise<SpawnResult>;
   stopAgent(agentId: string): void;
+  /** Resume a live/idle agent's session with another user turn. */
+  followUpAgent(req: FollowUpRequest): Promise<FollowUpResult>;
   /** Replay source: fold this through the reducer on mount so the world
    *  survives a renderer reload. */
   worldSnapshot(): Promise<PokeHubEvent[]>;

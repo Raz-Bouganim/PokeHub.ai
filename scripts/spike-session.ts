@@ -50,6 +50,9 @@ const handle = spawnAgent({
       `#${String(event.seq).padStart(3, "0")} ${event.kind.padEnd(22)} ` +
         (a ? `${a.location.padEnd(8)} ${a.status}` : ""),
     );
+    // One-shot: the spike proves the pipe for a single turn. The agent now goes
+    // `idle` (session resumable) rather than exiting, so end it explicitly.
+    if (event.kind === "agent.turn_finished") handle.stop();
   },
 });
 

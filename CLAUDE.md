@@ -31,10 +31,10 @@ after the spike.
 - All art original or CC0. No Nintendo assets, names or fonts.
 
 ## Current phase
-**Phase 1 — Legibility.** Phase 0 passed both bars (2026-08-30). Now: follow-up interaction
-(resume a spawned agent with another turn), full assistant-text capture + agent-focus view,
-per-agent raw-stream filter, full room set for one project, journal with diffs. Bar: it beats
-a terminal for a *single* agent. Real art / UI polish is Phase 3, not now.
+**Phase 1 — Legibility.** Phase 0 passed both bars (2026-08-30); follow-up interaction landed
+(2026-08-30). Now: full assistant-text capture + agent-focus view, per-agent raw-stream
+filter, full room set for one project, journal with diffs. Bar: it beats a terminal for a
+*single* agent. Real art / UI polish is Phase 3, not now.
 
 ## Session hygiene
 - `/kickoff` at the start of a session, `/wrap-up` at the end.

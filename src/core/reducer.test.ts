@@ -222,6 +222,99 @@ describe("reducer — a finished agent stays finished", () => {
   });
 });
 
+describe("reducer — follow-up interaction (session resume)", () => {
+  // spawn -> one turn -> idle -> a follow-up turn -> idle again.
+  const stream: PokeHubEvent[] = [
+    ev({ seq: 1, agentId: "F", kind: "agent.spawned", name: "Fen", agentClass: "Builder", cwd: "/f" }),
+    ev({ seq: 2, agentId: "F", source: "user", kind: "agent.prompt", text: "add a health check route" }),
+    ev({ seq: 3, agentId: "F", kind: "agent.session_started", sessionId: "sess-f" }),
+    ev({ seq: 4, agentId: "F", kind: "agent.thinking", thought: "wiring the route" }),
+    ev({ seq: 5, agentId: "F", kind: "tool.started", toolCallId: "f1", tool: "Edit", input: {} }),
+    ev({ seq: 6, agentId: "F", kind: "tool.finished", toolCallId: "f1", ok: true }),
+    ev({ seq: 7, agentId: "F", kind: "agent.thinking", thought: "route added at /healthz", channel: "prose" }),
+    ev({ seq: 8, agentId: "F", kind: "agent.turn_finished" }),
+    // follow-up turn — same log, session resumed by id
+    ev({ seq: 9, agentId: "F", source: "user", kind: "agent.prompt", text: "now add a test for it" }),
+    ev({ seq: 10, agentId: "F", kind: "tool.started", toolCallId: "f2", tool: "Write", input: {} }),
+    ev({ seq: 11, agentId: "F", kind: "tool.finished", toolCallId: "f2", ok: true }),
+    ev({ seq: 12, agentId: "F", kind: "agent.turn_finished" }),
+  ];
+
+  it("a clean turn end leaves the agent idle, not exited", () => {
+    const world = replay(stream.slice(0, 8), initialWorld());
+    const agent = world.agents["F"]!;
+    expect(agent.status).toBe("idle");
+    expect(agent.location).toBe("route");
+    expect(agent.activeTools).toEqual([]);
+    expect(agent.exitCode).toBeNull();
+    // the last thing it said stays in the bubble while it waits
+    expect(agent.thought).toBe("route added at /healthz");
+  });
+
+  it("a follow-up prompt revives the idle sprite and counts the turn", () => {
+    const afterFirstIdle = replay(stream.slice(0, 8), initialWorld());
+    expect(afterFirstIdle.agents["F"]!.promptCount).toBe(1);
+
+    const afterPrompt = replay(stream.slice(0, 9), initialWorld());
+    expect(afterPrompt.agents["F"]!.status).toBe("thinking");
+    expect(afterPrompt.agents["F"]!.thought).toBeNull();
+
+    const afterFollowUp = replay(stream.slice(0, 10), initialWorld());
+    const agent = afterFollowUp.agents["F"]!;
+    expect(agent.promptCount).toBe(2);
+    expect(agent.status).toBe("working");
+    expect(agent.location).toBe("forge");
+  });
+
+  it("ends idle again after the follow-up turn, session id retained", () => {
+    const world = replay(stream, initialWorld());
+    const agent = world.agents["F"]!;
+    expect(agent.status).toBe("idle");
+    expect(agent.promptCount).toBe(2);
+    expect(agent.sessionId).toBe("sess-f");
+  });
+
+  it("stays deterministic and per-agent idempotent across the resumed stream", () => {
+    const once = replay(stream, initialWorld());
+    const twice = replay(stream, once);
+    expect(twice).toEqual(once);
+    expect(once.maxSeqSeen).toBe(12);
+  });
+
+  it("a prompt cannot revive an agent that has genuinely exited", () => {
+    const exited: PokeHubEvent[] = [
+      ev({ seq: 1, agentId: "G", kind: "agent.spawned", name: "Gale", agentClass: "Scout", cwd: "/g" }),
+      ev({ seq: 2, agentId: "G", source: "user", kind: "agent.prompt", text: "look around" }),
+      ev({ seq: 3, agentId: "G", kind: "agent.exited", code: 1, reason: "error_max_turns" }),
+      ev({ seq: 4, agentId: "G", source: "user", kind: "agent.prompt", text: "try again" }),
+    ];
+    const agent = replay(exited, initialWorld()).agents["G"]!;
+    expect(agent.status).toBe("exited");
+    expect(agent.promptCount).toBe(1); // the post-exit prompt is ignored
+  });
+
+  it("an out-of-order prompt does not downgrade an agent still showing work", () => {
+    const outOfOrder: PokeHubEvent[] = [
+      ev({ seq: 1, agentId: "H", kind: "agent.spawned", name: "Hux", agentClass: "Builder", cwd: "/h" }),
+      ev({ seq: 2, agentId: "H", source: "user", kind: "agent.prompt", text: "go" }),
+      ev({ seq: 3, agentId: "H", kind: "tool.started", toolCallId: "h1", tool: "Edit", input: {} }),
+      ev({ seq: 4, agentId: "H", kind: "permission.requested", toolCallId: "h1", tool: "Edit", input: {} }),
+      // a stray/replayed prompt while the agent is blocked
+      ev({ seq: 5, agentId: "H", source: "user", kind: "agent.prompt", text: "and hurry" }),
+    ];
+    const agent = replay(outOfOrder, initialWorld()).agents["H"]!;
+    expect(agent.status).toBe("blocked");
+    expect(agent.pendingPermissions).toHaveLength(1);
+    expect(agent.promptCount).toBe(2);
+  });
+
+  it("does not flag an idle agent as stalled, however long it waits", () => {
+    const world = replay(stream.slice(0, 8), initialWorld());
+    const wayLater = Date.parse("2026-08-29T14:00:00.000Z");
+    expect(isStalled(world.agents["F"]!, wayLater)).toBe(false);
+  });
+});
+
 describe("reducer — purity guarantees", () => {
   const events = parseLog(readFileSync(fixture, "utf8"));
 

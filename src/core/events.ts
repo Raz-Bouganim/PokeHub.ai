@@ -59,6 +59,23 @@ export interface SessionStartedEvent extends EventBase {
   sessionId: string;
 }
 
+/** A user turn was handed to the session — the initial task, or a follow-up
+ *  typed into the composer for a live or idle agent. Recorded so the composer's
+ *  full history and the journal are rebuildable from the log alone
+ *  (VISION decision #3). `source` is `"user"`. */
+export interface AgentPromptEvent extends EventBase {
+  kind: "agent.prompt";
+  /** The user's message for this turn, verbatim. */
+  text: string;
+}
+
+/** One `query()` turn ended cleanly and the session can still be resumed — the
+ *  agent is idle, awaiting a follow-up, NOT gone. `agent.exited` is reserved for
+ *  a session that ended abnormally or was stopped. */
+export interface AgentTurnFinishedEvent extends EventBase {
+  kind: "agent.turn_finished";
+}
+
 /** The model started a tool call. Drives the walk to a room. */
 export interface ToolStartedEvent extends EventBase {
   kind: "tool.started";
@@ -124,6 +141,8 @@ export interface AgentExitedEvent extends EventBase {
 export type PokeHubEvent =
   | AgentSpawnedEvent
   | SessionStartedEvent
+  | AgentPromptEvent
+  | AgentTurnFinishedEvent
   | ToolStartedEvent
   | ToolFinishedEvent
   | AgentThinkingEvent

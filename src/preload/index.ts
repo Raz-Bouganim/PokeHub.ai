@@ -7,6 +7,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { PokeHubEvent } from "../core/events.ts";
 import {
   IPC,
+  type FollowUpRequest,
   type PermissionAnswer,
   type PermissionAskEnvelope,
   type PokeHubBridge,
@@ -18,6 +19,9 @@ const bridge: PokeHubBridge = {
 
   stopAgent: (agentId: string) =>
     ipcRenderer.send(IPC.stopAgent, { agentId }),
+
+  followUpAgent: (req: FollowUpRequest) =>
+    ipcRenderer.invoke(IPC.followUpAgent, req),
 
   worldSnapshot: () => ipcRenderer.invoke(IPC.worldSnapshot),
 

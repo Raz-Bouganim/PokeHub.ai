@@ -14,6 +14,7 @@ export type AgentStatus =
   | "working" // one or more tool calls are in flight
   | "blocked" // a canUseTool request is pending on the user
   | "erroring" // last tool result was an error
+  | "idle" // a turn finished cleanly; session resumable, awaiting a follow-up
   | "exited";
 
 export interface ActiveTool {
@@ -51,6 +52,10 @@ export interface AgentState {
   exitCode: number | null;
   /** Why the session ended abnormally (SDK result subtype), if it did. */
   exitReason: string | null;
+  /** User turns handed to this agent so far (initial task + every follow-up).
+   *  Honest flavour for the focus view; derived from the log, never a second
+   *  source of truth. */
+  promptCount: number;
   /** ts of the last event applied to this agent. Stored for selectors; the
    *  reducer never compares it to wall-clock. */
   lastEventTs: string | null;

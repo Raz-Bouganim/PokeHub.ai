@@ -5,29 +5,29 @@ The spec is `VISION.md`. The always-on rules are `CLAUDE.md`.
 
 ## Next up
 
-**Phase 0 is done — both pass bars cleared (2026-08-30).** Phase 1 (Legibility) starts now.
-Goal for the phase: full room set for one project, encounter-style permission dialog, journal
-with diffs, raw-stream toggle — and it must genuinely beat a terminal for a *single* agent.
+**Phase 1 — Legibility.** Goal for the phase: full room set for one project, encounter-style
+permission dialog, journal with diffs, raw-stream toggle — and it must genuinely beat a
+terminal for a *single* agent. Follow-up interaction landed 2026-08-30 and works live.
 
-**Start here — follow-up interaction (the #1 gap from the pass test).** Right now the composer
-only *spawns*: an agent is fire-and-forget, and there is no way to send it another turn. That
-alone fails Phase 1's bar. Wire the session-resume path:
-- `session.ts` runs one `query()` per agent via the Agent SDK. The SDK supports resuming a
-  session by its ID (we already capture `agent.session_started` with the session ID).
-- Add an IPC path: renderer sends `{agentId, text}` for a live/exited agent → main resumes
-  that session with a new user turn → new events append to the same NDJSON log.
-- Composer UI: when an agent is selected, the composer targets it (follow-up) instead of
-  spawning; keep a "new agent" affordance. VISION decision #3 = docked composer with full
-  history.
+**Start here — capture full assistant text + agent-focus view (finding #2 from the pass test).**
+`translate` only keeps `firstLine(text)` for the thought bubble; the full assistant reply is
+stored nowhere, so a multi-turn conversation with an agent (now possible via follow-up) can't
+actually be read back.
+- Add a fuller event carrying the whole assistant text — either a new `agent.message` kind or
+  widen `AgentThinkingEvent` with a `full`/`body` field. `translate`'s `assistant` case (the
+  `block.type === "text"` branch) is where the text is dropped; keep the one-line `thought`
+  for the bubble *and* the full body.
+- Reducer: store the last assistant message (and/or a short transcript) on `AgentState`.
+- Build the agent-focus view — VISION's "one agent, full detail" zoom. Clicking a sprite / the
+  already-existing agent-row selection should open a panel with: the conversation so far
+  (user turns are `agent.prompt` events, `text` field; assistant turns are the new full-text
+  events), current tools, HP-bar placeholder. The row-selection state (`selectedId` in
+  `App.tsx`) already exists and drives the composer — reuse it.
 
 Then, in rough priority order (all Phase 1):
-- **Capture full assistant text.** `translate` only keeps `firstLine(text)` for the thought
-  bubble; the full reply is stored nowhere. Add a fuller `agent.message` event (or widen
-  `agent.thinking`) carrying the whole text, then build the agent-focus view (VISION's
-  "one agent, full detail" zoom) to show it — this is finding #2 from the pass test.
 - **Per-agent raw log.** The RAW EVENT LOG interleaves every agent and each agent's `seq`
   restarts at 001, so you can't follow one. Add a per-agent filter + colour. Every event
-  already carries `agentId`.
+  already carries `agentId`. (`App.tsx` already shows `promptCount` as "N turns" per row.)
 - Journal with diffs (files read vs modified visually distinct), full room set polish.
 - UI refactor / real art is **Phase 3**, not now — acknowledged and deferred on purpose.
 
@@ -36,7 +36,8 @@ Reference notes:
   text world view (raw text stays one keypress away — both panels are always visible).
 - `npm run spike -- --cwd <repo> --class <Class> --prompt "…"` exercises the whole pipe
   headlessly (no Electron, no map) and prints world state per event — best for debugging the
-  reducer.
+  reducer. It now `stop()`s itself on the first `agent.turn_finished` (agents no longer
+  self-exit after one turn); it does not exercise follow-up.
 - `npm run dev` also serves the renderer at `localhost:5173`; it survives a missing preload
   bridge (empty world, no crash), so the map is eyeballable in a plain browser.
 - Restart `npm run dev` fully between runs — StrictMode remount + Pixi async init is fragile.
@@ -45,6 +46,16 @@ Reference notes:
 
 ## Done
 
+- **2026-08-30** — **Follow-up interaction — resume a spawned agent with another turn.**
+  Verified live: ran two agents via `npm run dev` and re-prompted each one. New events
+  `agent.prompt` (source `user`, carries turn text) and `agent.turn_finished`; `translate`
+  emits `turn_finished` for a clean SDK `result` (only error subtypes / stops still
+  `agent.exited`). New `AgentStatus` `"idle"` (turn done, session resumable) + `promptCount`.
+  `session.ts` keeps the NDJSON log open across turns via a lifecycle loop; new
+  `handle.followUp(text)` runs `query({ resume: sessionId, prompt })`, chained after any
+  in-flight turn. New `agent:followup` IPC + `followUpAgent` bridge method. Composer targets a
+  selected agent (follow-up) vs spawning, auto-selects a freshly spawned agent, `+ new` clears.
+  68 tests (was 61). Review found 5 issues, all fixed (see Decisions + Gotchas).
 - **2026-08-30** — **Ran the Phase 0 pass test and it passes on both bars.** Spawned two
   agents (Rowan/Scout + Mavric/Reviewer) against a real repo via `npm run dev`: reading both
   at a glance beat two terminals, and the encounter screen made real commands worth reading.
@@ -124,6 +135,23 @@ Reference notes:
 - **2026-08-30** — Phase 0 passed on both bars → the phase is now Phase 1 (Legibility). First
   Phase 1 task is **follow-up interaction** (resume a spawned agent with another turn): a
   fire-and-forget composer can't clear Phase 1's "beats a terminal for one agent" bar.
+- **2026-08-30** — A clean SDK `result` is **`agent.turn_finished` → status `idle`**, not
+  `agent.exited`. A session is many turns; `agent.exited` is reserved for stop / error
+  subtypes / abnormal end. `idle` sprites can be re-prompted; the "finished agent stays
+  finished" reducer guard still makes a real exit permanent.
+- **2026-08-30** — Resume is **per-turn `query({ resume: sessionId })`**, not SDK streaming-
+  input mode — matches "attach mode = tail a file", keeps `session.ts` close to the old
+  one-`query()` shape, and the log just keeps appending. Between turns the `claude` process
+  is gone; only the session id and the open log file persist.
+- **2026-08-30** — `handle.followUp()` resolves when the turn is **accepted/queued**, not when
+  it completes (a turn runs for minutes). The event stream already reports progress + outcome.
+  `{ ok: false }` means only "couldn't accept" (finished / no session yet). This is why the
+  IPC handler doesn't freeze the composer.
+- **2026-08-30** — Spawning **auto-selects the new agent** so the next composer send continues
+  its session; `+ new` deselects. Follow-up mode is keyed off `selectedId` alone (not a
+  world-state lookup) so the spawn→first-event gap can't spawn a duplicate.
+- **2026-08-30** — Main `stop()`s every agent on window-close / all-closed — needed now that
+  the session log is held open across turns and only flushes on `stop()`.
 
 ## Gotchas
 
@@ -177,6 +205,19 @@ _Things learned the hard way. One line each — what broke, and what fixed it._
 - **The thought bubble only shows the first line of an agent's reply** — `translate` records
   `firstLine(text)` for `agent.thinking`. The full assistant response is never captured
   anywhere. Phase 1 needs an agent-focus view + a fuller text event.
+- **TS narrows a closure-mutated `let` to a stale literal.** `let lifecycle: "running" |
+  "idle" | "exited"` is only ever reassigned inside the `emit` closure; TS's control-flow
+  analysis doesn't see that, so a later `lifecycle === "exited"` after an earlier guard
+  errored as "comparison appears unintentional". Fix: read it through a
+  `const hasExited = () => lifecycle === "exited"` helper defined next to the declaration.
+- **Code-review of the follow-up feature caught 5 real issues, all fixed:** (1+2) `followUp`
+  awaited the whole turn → froze the composer (global `busy`) for minutes and returned
+  `{ ok: true }` even on a turn that errored — now resolves on accept; (3) `send`'s `busy`
+  re-entry guard used a stale closure value → double-click double-spawned, added a `useRef`;
+  (4) `setSelectedId` after spawn pointed at an agent not yet in `world.agents` so `followMode`
+  was briefly false → drive `followMode` off `selectedId` directly; (5) `agent.prompt` flipped
+  status to `thinking` without regard for in-flight tools/permissions on out-of-order replay →
+  guard on `activeTools`/`pendingPermissions` being empty.
 - **Phase 0 pass test, live findings (2026-08-30):** (a) agents are fire-and-forget — the
   composer only spawns, no way to send a follow-up turn to a running/exited agent, so a
   reply that invites a follow-up dead-ends; (b) agent replies come back but are visible
