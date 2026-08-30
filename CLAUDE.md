@@ -31,11 +31,10 @@ after the spike.
 - All art original or CC0. No Nintendo assets, names or fonts.
 
 ## Current phase
-**Phase 0 spike.** Two agents, four rooms (Library, Forge, Gym, Center), the permission
-encounter screen, real events driving real sprites, placeholder art.
-Passes only if BOTH are true:
-1. Two agents are readable faster than two terminals.
-2. The encounter makes you actually read a command you'd normally wave through.
+**Phase 1 — Legibility.** Phase 0 passed both bars (2026-08-30). Now: follow-up interaction
+(resume a spawned agent with another turn), full assistant-text capture + agent-focus view,
+per-agent raw-stream filter, full room set for one project, journal with diffs. Bar: it beats
+a terminal for a *single* agent. Real art / UI polish is Phase 3, not now.
 
 ## Session hygiene
 - `/kickoff` at the start of a session, `/wrap-up` at the end.

@@ -5,38 +5,50 @@ The spec is `VISION.md`. The always-on rules are `CLAUDE.md`.
 
 ## Next up
 
-The map renders (four rooms + Route draw; verified in a browser after the CSP fix) and the
-spine is reviewed + verified end-to-end. **The only thing left for Phase 0 is the pass
-judgment** — it needs a human at the keyboard, not more code.
+**Phase 0 is done — both pass bars cleared (2026-08-30).** Phase 1 (Legibility) starts now.
+Goal for the phase: full room set for one project, encounter-style permission dialog, journal
+with diffs, raw-stream toggle — and it must genuinely beat a terminal for a *single* agent.
 
-Run it: `npm run dev` (restart it if one is already running — the map fix needs a fresh
-load), spawn two agents against a real repo (need `claude` logged in), and decide both bars
-honestly:
-1. Can you answer "what are both doing right now" faster than with two terminals?
-2. Does the encounter screen make you actually read a command you'd normally wave through?
+**Start here — follow-up interaction (the #1 gap from the pass test).** Right now the composer
+only *spawns*: an agent is fire-and-forget, and there is no way to send it another turn. That
+alone fails Phase 1's bar. Wire the session-resume path:
+- `session.ts` runs one `query()` per agent via the Agent SDK. The SDK supports resuming a
+  session by its ID (we already capture `agent.session_started` with the session ID).
+- Add an IPC path: renderer sends `{agentId, text}` for a live/exited agent → main resumes
+  that session with a new user turn → new events append to the same NDJSON log.
+- Composer UI: when an agent is selected, the composer targets it (follow-up) instead of
+  spawning; keep a "new agent" affordance. VISION decision #3 = docked composer with full
+  history.
 
-- Fail bar 1 → the map is decoration; redesign the map layer, don't push on.
-- Fail bar 2 → the encounter framing isn't earning its keep; rework it.
-- Both pass → Phase 0 is done, start Phase 1 (full room set for one project, journal with
-  diffs, raw-stream toggle).
+Then, in rough priority order (all Phase 1):
+- **Capture full assistant text.** `translate` only keeps `firstLine(text)` for the thought
+  bubble; the full reply is stored nowhere. Add a fuller `agent.message` event (or widen
+  `agent.thinking`) carrying the whole text, then build the agent-focus view (VISION's
+  "one agent, full detail" zoom) to show it — this is finding #2 from the pass test.
+- **Per-agent raw log.** The RAW EVENT LOG interleaves every agent and each agent's `seq`
+  restarts at 001, so you can't follow one. Add a per-agent filter + colour. Every event
+  already carries `agentId`.
+- Journal with diffs (files read vs modified visually distinct), full room set polish.
+- UI refactor / real art is **Phase 3**, not now — acknowledged and deferred on purpose.
 
-Notes for that session:
+Reference notes:
 - The map is `src/renderer/src/WorldMap.tsx`, mounted in `App.tsx` as a panel *beside* the
   text world view (raw text stays one keypress away — both panels are always visible).
 - `npm run spike -- --cwd <repo> --class <Class> --prompt "…"` exercises the whole pipe
   headlessly (no Electron, no map) and prints world state per event — best for debugging the
-  reducer, not for judging the map.
-- `npm run dev` also serves the renderer at `localhost:5173`; it now survives a missing
-  preload bridge (empty world, no crash), so the map is eyeballable in a plain browser —
-  handy for map/layout work without Electron.
-- Open gap surfaced this session: the thought bubble shows only the first line of an agent's
-  reply (`translate` keeps `firstLine(text)`); the full response is captured nowhere. Phase 1
-  wants an agent-focus view + a fuller assistant-text event.
+  reducer.
+- `npm run dev` also serves the renderer at `localhost:5173`; it survives a missing preload
+  bridge (empty world, no crash), so the map is eyeballable in a plain browser.
+- Restart `npm run dev` fully between runs — StrictMode remount + Pixi async init is fragile.
 - Renderer main chunk is ~1.15 MB now that Pixi is bundled (past Vite's 500 kB warning).
   Code-split before Phase 4 packaging; ignore until then.
 
 ## Done
 
+- **2026-08-30** — **Ran the Phase 0 pass test and it passes on both bars.** Spawned two
+  agents (Rowan/Scout + Mavric/Reviewer) against a real repo via `npm run dev`: reading both
+  at a glance beat two terminals, and the encounter screen made real commands worth reading.
+  Phase 0 spike complete; moving to Phase 1. Four findings logged for Phase 1 (see "Next up").
 - **2026-08-30** — Fixed the blank map: Pixi v8's WebGL renderer needs `unsafe-eval`, which
   the renderer CSP forbids — added a side-effect `import "pixi.js/unsafe-eval"` before
   `Application.init()`. The failure was invisible because a missing `window.pokehub` also
@@ -109,6 +121,9 @@ Notes for that session:
 - **2026-08-30** — The renderer degrades without the preload bridge (no `window.pokehub` →
   empty world, warning, no crash) instead of assuming Electron — a white screen hid the real
   bug, and a browser-runnable renderer is useful for map work.
+- **2026-08-30** — Phase 0 passed on both bars → the phase is now Phase 1 (Legibility). First
+  Phase 1 task is **follow-up interaction** (resume a spawned agent with another turn): a
+  fire-and-forget composer can't clear Phase 1's "beats a terminal for one agent" bar.
 
 ## Gotchas
 
@@ -162,6 +177,12 @@ _Things learned the hard way. One line each — what broke, and what fixed it._
 - **The thought bubble only shows the first line of an agent's reply** — `translate` records
   `firstLine(text)` for `agent.thinking`. The full assistant response is never captured
   anywhere. Phase 1 needs an agent-focus view + a fuller text event.
+- **Phase 0 pass test, live findings (2026-08-30):** (a) agents are fire-and-forget — the
+  composer only spawns, no way to send a follow-up turn to a running/exited agent, so a
+  reply that invites a follow-up dead-ends; (b) agent replies come back but are visible
+  nowhere (same root cause as the thought-bubble line above); (c) the RAW EVENT LOG
+  interleaves all agents and each agent's `seq` restarts at 001, so a single agent can't be
+  followed — needs a per-`agentId` filter + colour; (d) UI is rough (expected — Phase 3).
 
 ## VISION.md needs updating
 
