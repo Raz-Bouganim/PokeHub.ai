@@ -5,11 +5,13 @@ The spec is `VISION.md`. The always-on rules are `CLAUDE.md`.
 
 ## Next up
 
-The map exists and the spine is reviewed + verified end-to-end. **The only thing left for
-Phase 0 is the pass judgment** — it needs a human at the keyboard, not more code.
+The map renders (four rooms + Route draw; verified in a browser after the CSP fix) and the
+spine is reviewed + verified end-to-end. **The only thing left for Phase 0 is the pass
+judgment** — it needs a human at the keyboard, not more code.
 
-Run it: `npm run dev`, spawn two agents against a real repo (need `claude` logged in), and
-decide both bars honestly:
+Run it: `npm run dev` (restart it if one is already running — the map fix needs a fresh
+load), spawn two agents against a real repo (need `claude` logged in), and decide both bars
+honestly:
 1. Can you answer "what are both doing right now" faster than with two terminals?
 2. Does the encounter screen make you actually read a command you'd normally wave through?
 
@@ -24,11 +26,23 @@ Notes for that session:
 - `npm run spike -- --cwd <repo> --class <Class> --prompt "…"` exercises the whole pipe
   headlessly (no Electron, no map) and prints world state per event — best for debugging the
   reducer, not for judging the map.
-- Renderer main chunk is ~1.08 MB now that Pixi is bundled (past Vite's 500 kB warning).
+- `npm run dev` also serves the renderer at `localhost:5173`; it now survives a missing
+  preload bridge (empty world, no crash), so the map is eyeballable in a plain browser —
+  handy for map/layout work without Electron.
+- Open gap surfaced this session: the thought bubble shows only the first line of an agent's
+  reply (`translate` keeps `firstLine(text)`); the full response is captured nowhere. Phase 1
+  wants an agent-focus view + a fuller assistant-text event.
+- Renderer main chunk is ~1.15 MB now that Pixi is bundled (past Vite's 500 kB warning).
   Code-split before Phase 4 packaging; ignore until then.
 
 ## Done
 
+- **2026-08-30** — Fixed the blank map: Pixi v8's WebGL renderer needs `unsafe-eval`, which
+  the renderer CSP forbids — added a side-effect `import "pixi.js/unsafe-eval"` before
+  `Application.init()`. The failure was invisible because a missing `window.pokehub` also
+  crashed the whole React tree; `useWorld`/`App` now no-op without the bridge. `.map-host`
+  got a fixed aspect-ratio box and WorldMap shows init failures as text. Verified the rooms
+  render. Committed + pushed (`a4210f4`, `1301625`).
 - **2026-08-29** — Reviewed the map + spine changes (fork) and verified the pipeline
   end-to-end against a live `claude` session on a throwaway demo repo (subagent) — spine
   PASS. Fixed all 7 review findings: Pixi async-init cleanup + no dropped world updates;
@@ -90,6 +104,11 @@ Notes for that session:
   agent to `thinking`, not `erroring`.
 - **2026-08-29** — Permission-ask deliverability uses a renderer ack + 15s timeout, NOT a
   decision deadline — once the renderer acks, the ask waits for the user indefinitely.
+- **2026-08-30** — Keep the strict renderer CSP (`script-src 'self'`, no `unsafe-eval`) and
+  make Pixi conform via `pixi.js/unsafe-eval`, rather than loosening the CSP for a library.
+- **2026-08-30** — The renderer degrades without the preload bridge (no `window.pokehub` →
+  empty world, warning, no crash) instead of assuming Electron — a white screen hid the real
+  bug, and a browser-runnable renderer is useful for map work.
 
 ## Gotchas
 
