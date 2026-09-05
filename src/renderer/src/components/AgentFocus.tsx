@@ -11,9 +11,9 @@
  */
 
 import { useState } from "react";
-import type { AgentState, JournalEntry, RecentTool } from "../../core/world.ts";
+import type { AgentState, JournalEntry, RecentTool } from "../../../core/world.ts";
+import { cx } from "../cx.ts";
 import styles from "./AgentFocus.module.css";
-import { cx } from "./cx.ts";
 import { Markdown } from "./Markdown.tsx";
 
 interface AgentFocusProps {

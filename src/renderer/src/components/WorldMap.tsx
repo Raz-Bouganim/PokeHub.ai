@@ -15,10 +15,10 @@ import { useEffect, useRef, useState } from "react";
 // before `Application.init()`.
 import "pixi.js/unsafe-eval";
 import { Application, Container, Graphics, Text } from "pixi.js";
-import type { Location } from "../../core/events.ts";
-import type { AgentStatus, WorldState } from "../../core/world.ts";
-import { agentList } from "../../core/selectors.ts";
-import { agentColor } from "../../core/text/agent-color.ts";
+import type { Location } from "../../../core/events.ts";
+import type { AgentStatus, WorldState } from "../../../core/world.ts";
+import { agentList } from "../../../core/selectors.ts";
+import { agentColor } from "../../../core/text/agent-color.ts";
 import styles from "./WorldMap.module.css";
 
 const W = 600;

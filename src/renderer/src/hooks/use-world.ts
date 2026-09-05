@@ -7,9 +7,9 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import type { PokeHubEvent } from "../../core/events.ts";
-import { reduce } from "../../core/reducer.ts";
-import { initialWorld, type WorldState } from "../../core/world.ts";
+import type { PokeHubEvent } from "../../../core/events.ts";
+import { reduce } from "../../../core/reducer.ts";
+import { initialWorld, type WorldState } from "../../../core/world.ts";
 
 export function useWorld(): { world: WorldState; log: PokeHubEvent[] } {
   const [world, setWorld] = useState<WorldState>(initialWorld);

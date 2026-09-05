@@ -1,0 +1,35 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 4, 12, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dialog {
+  background: var(--surface-bg);
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  padding: 20px;
+  max-width: 620px;
+  width: 90%;
+}
+
+.dialog pre {
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 10px;
+  overflow-x: auto;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.moreWaiting {
+  opacity: 0.6;
+}

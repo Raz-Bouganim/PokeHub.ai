@@ -10,7 +10,7 @@
  */
 
 import type { ReactNode } from "react";
-import { cx } from "./cx.ts";
+import { cx } from "../cx.ts";
 import styles from "./Markdown.module.css";
 
 export function Markdown({ text }: { text: string }): JSX.Element {

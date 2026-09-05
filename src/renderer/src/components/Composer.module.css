@@ -1,0 +1,32 @@
+.bar {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.bar input {
+  width: 120px;
+}
+
+.bar input.cwdInput {
+  width: 260px;
+}
+
+.bar textarea {
+  flex: 1;
+  height: 34px;
+  resize: vertical;
+}
+
+.notice {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: -4px;
+}
+
+.noticeText {
+  color: var(--status-warn);
+}
