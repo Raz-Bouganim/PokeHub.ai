@@ -4,6 +4,7 @@ import type { PermissionAskEnvelope } from "../../shared/ipc.ts";
 import type { PermissionDecision } from "../../shared/permissions.ts";
 import { knownClasses } from "../../core/classes.ts";
 import { agentList } from "../../core/selectors.ts";
+import { agentHue } from "../../core/text.ts";
 import { useWorld } from "./useWorld.ts";
 import { WorldMap } from "./WorldMap.tsx";
 import { AgentFocus } from "./AgentFocus.tsx";
@@ -22,6 +23,7 @@ export function App() {
    *  spawning a new one. */
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [logFilterOn, setLogFilterOn] = useState(false);
   // Re-entry guard: `busy` state only blocks re-entry after a re-render, which
   // can lose the race with a genuine double-click. This flips synchronously.
   const sending = useRef(false);
@@ -164,8 +166,10 @@ export function App() {
               className={`agent${a.id === selectedId ? " selected" : ""}`}
               key={a.id}
               onClick={() => setSelectedId(a.id)}
+              style={{ borderLeftColor: agentColor(a.id) }}
             >
-              <strong>{a.name}</strong> <span>({a.agentClass})</span>
+              <strong style={{ color: agentColor(a.id) }}>{a.name}</strong>{" "}
+              <span>({a.agentClass})</span>
               {" — "}
               <span className="room">{a.location}</span>
               {" · "}
@@ -207,17 +211,41 @@ export function App() {
           />
         )}
         <div className="panel raw-log">
-          <h2>Raw event log</h2>
-          {log.slice(-200).map((e) => (
-            // (agentId, seq) is unique per agent and stable — no array index, or
-            // every row's key shifts on each new event once the log passes 200.
-            <div className="log-line" key={`${e.agentId}-${e.seq}`}>
-              <span className="kind">
-                {String(e.seq).padStart(3, "0")} {e.kind}
-              </span>{" "}
-              {summarize(e)}
-            </div>
-          ))}
+          <div className="raw-log-head">
+            <h2>Raw event log</h2>
+            {selectedId && (
+              <label className="raw-log-filter">
+                <input
+                  type="checkbox"
+                  checked={logFilterOn}
+                  onChange={(e) => setLogFilterOn(e.target.checked)}
+                />
+                only {selected?.name ?? "this agent"}
+              </label>
+            )}
+          </div>
+          {(logFilterOn && selectedId
+            ? log.filter((e) => e.agentId === selectedId)
+            : log
+          )
+            .slice(-200)
+            .map((e) => (
+              // (agentId, seq) is unique per agent and stable — no array index,
+              // or every row's key shifts once the log passes 200.
+              <div
+                className="log-line"
+                key={`${e.agentId}-${e.seq}`}
+                style={{ borderLeftColor: agentColor(e.agentId) }}
+              >
+                <span className="log-agent" style={{ color: agentColor(e.agentId) }}>
+                  {world.agents[e.agentId]?.name ?? e.agentId.slice(0, 6)}
+                </span>{" "}
+                <span className="kind">
+                  {String(e.seq).padStart(3, "0")} {e.kind}
+                </span>{" "}
+                {summarize(e)}
+              </div>
+            ))}
         </div>
       </div>
 
@@ -247,6 +275,12 @@ export function App() {
       )}
     </div>
   );
+}
+
+/** Same colour for the same agent everywhere it appears (agent list, raw log,
+ *  sprite accent ring in the map). */
+function agentColor(agentId: string): string {
+  return `hsl(${agentHue(agentId)}, 65%, 65%)`;
 }
 
 function summarize(e: PokeHubEvent): string {

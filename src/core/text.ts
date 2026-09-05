@@ -121,6 +121,19 @@ export function toolTarget(
   }
 }
 
+/**
+ * A stable hue (0-359) for an agent id — same agent, same colour, everywhere
+ * it shows up (raw-log rows, the sprite accent ring), with no colour registry
+ * to keep in sync. Pure hash of the id string.
+ */
+export function agentHue(agentId: string): number {
+  let hash = 0;
+  for (let i = 0; i < agentId.length; i++) {
+    hash = (hash * 31 + agentId.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash) % 360;
+}
+
 function basename(p: string): string {
   const parts = p.split(/[/\\]/).filter(Boolean);
   return parts.length > 0 ? parts[parts.length - 1]! : p;

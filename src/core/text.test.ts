@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bubbleLine, stripInlineMarkdown, toolTarget } from "./text.ts";
+import { agentHue, bubbleLine, stripInlineMarkdown, toolTarget } from "./text.ts";
 
 describe("bubbleLine — a longer reply as one bubble line", () => {
   it("takes the first sentence, not the whole first line", () => {
@@ -91,5 +91,23 @@ describe("toolTarget — the short 'what it touched' label", () => {
   it("is null when there is nothing worth showing", () => {
     expect(toolTarget("Read", {})).toBeNull();
     expect(toolTarget("SomeMcpTool", { foo: 1 })).toBeNull();
+  });
+});
+
+describe("agentHue — a stable colour per agent id", () => {
+  it("is deterministic for the same id", () => {
+    expect(agentHue("agent-1")).toBe(agentHue("agent-1"));
+  });
+
+  it("differs for different ids", () => {
+    expect(agentHue("agent-1")).not.toBe(agentHue("agent-2"));
+  });
+
+  it("is always a valid hue in [0, 360)", () => {
+    for (const id of ["a", "agent-1", "", "z".repeat(50)]) {
+      const h = agentHue(id);
+      expect(h).toBeGreaterThanOrEqual(0);
+      expect(h).toBeLessThan(360);
+    }
   });
 });

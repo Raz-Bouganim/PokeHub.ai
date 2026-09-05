@@ -7,25 +7,23 @@ The spec is `VISION.md`. The always-on rules are `CLAUDE.md`.
 
 **Phase 1 — Legibility.** Goal for the phase: full room set for one project, encounter-style
 permission dialog, journal with diffs, raw-stream toggle — and it must genuinely beat a
-terminal for a *single* agent. Follow-up interaction + full-text capture + agent-focus view
-all landed 2026-08-30 and were verified live.
+terminal for a *single* agent. Follow-up interaction + full-text capture + agent-focus view +
+per-agent raw-log filter/colour all landed and were verified live.
 
-**Start here — per-agent raw log.** The RAW EVENT LOG panel in `App.tsx` interleaves every
-agent and each agent's `seq` restarts at 001, so a single agent can't be followed. Add:
-- A per-`agentId` filter — reuse `selectedId` (already drives the composer and the focus
-  panel): when an agent is selected, offer "only this agent" for the raw log too. Every event
-  carries `e.agentId` already; the list is `useWorld().log`.
-- A stable colour per agent (hash `agentId` → hue) on both the raw-log rows and, ideally, the
-  sprite tint accent — so the same agent reads the same everywhere.
-- Keep the interleaved "all" view as the default; the filter is a toggle, not a replacement.
-The focus panel (`AgentFocus.tsx`) is the place to surface the filtered view, or a segmented
-control on the raw-log panel header — either is fine.
+**Start here — journal with diffs.** Files *read* vs *modified* visually distinct (VISION
+"Legibility features"). The seed is already in place:
+- `AgentState.recentTools` (`RecentTool[]`, cap 8, in `src/core/world.ts`) carries `tool` +
+  `target` + `ok` per call, rendered today as the "recent tools" trail in `AgentFocus.tsx`.
+- The journal is the **unbounded, grouped-by-turn** version of that trail, with `+N / -M` pulled
+  from `tool.finished.summary` (already populated for edits — check `translate.ts` for exactly
+  which tools set it). Read vs. write should be visually distinct (colour or icon), not just
+  labelled — that's the whole point of the feature per VISION.
+- Natural home is a new panel or a tab inside `AgentFocus.tsx`, scoped to the focused agent (it
+  already reads `agent.transcript`/`agent.recentTools` the same way). Reuse the `agentColor()`
+  helper in `App.tsx` (wraps `core/text.ts`'s `agentHue`) if the journal ever shows more than
+  one agent at once — not needed for a single-agent panel.
 
 Then, in rough priority order (all Phase 1):
-- **Journal with diffs.** Files *read* vs *modified* visually distinct (VISION "Legibility
-  features"). The `recentTools` trail on `AgentState` (added this session, `RecentTool[]`,
-  cap 8) is the seed — it already carries `tool` + `target` + `ok`; the journal is the
-  unbounded, grouped-by-turn version with `+N / -M` from `tool.finished.summary`.
 - Full room-set polish, encounter-dialog polish.
 - Swap the hand-rolled `Markdown.tsx` for `react-markdown` **only if** the transcript becomes
   central and the mini-renderer's gaps (nested lists, task lists) start to bite. Not now.
@@ -50,6 +48,15 @@ Reference notes:
 
 ## Done
 
+- **2026-09-05** — **Per-agent raw-log filter + stable agent colour** (Phase 1, the prior
+  session's "start here"). New `agentHue(agentId)` in `src/core/text.ts` (pure hash → hue
+  0-359, tested). `App.tsx`'s raw-log panel gained an "only `<name>`" checkbox that appears once
+  an agent is selected (default stays the interleaved "all" view); every log row now shows a
+  coloured agent-name tag + matching left-border accent, and the agent-list rows in the left
+  panel got the same colour treatment. `WorldMap.tsx` sprites gained a thin per-agent accent
+  ring (`hsl(...)` string, Pixi's `Color` parses CSS colour strings directly) independent of
+  the status-tint fill, so the same agent reads the same colour in the map, the agent list, and
+  the raw log. 99 tests (was 96). Verified live via `npm run dev`.
 - **2026-08-30** — **Full assistant-text capture + agent-focus view** (Phase 1, finding #2
   from the pass test). Verified live with a Scout on the PokeHub repo across 4 turns. New
   `agent.message` event carries the verbatim reply; `translate` emits **one** per prose block
@@ -111,6 +118,13 @@ Reference notes:
 
 ## Decisions
 
+- **2026-09-05** — Per-agent colour is a **pure hash of `agentId` → hue**, not a registry/palette
+  assigned at spawn time — no state to keep in sync, and it survives a reload since it's derived
+  from the id alone. Rendered as `hsl(h, 65%, 65%)` everywhere (CSS and Pixi both parse it), so
+  one function feeds three call sites (raw log, agent list, sprite ring) with no duplication.
+- **2026-09-05** — The map's per-agent accent ring is a **separate ring from the status tint**,
+  not a recolour of the status fill — status colour is VISION's "most valuable glance-level
+  fact" and must stay legible on its own; identity is a secondary, additive signal.
 - **2026-08-29** — **Electron, not Tauri v2**, for Phase 0 and likely v1. The Agent SDK and
   `canUseTool` are Node-only; supervising `claude`'s grandchildren (bash, MCP) is a known Tauri
   sidecar gap; bundled Chromium keeps the Pixi map identical on macOS/Windows. All business
@@ -191,6 +205,11 @@ Reference notes:
 
 _Things learned the hard way. One line each — what broke, and what fixed it._
 
+- **No visual browser verification available in this sandbox (2026-09-05).** The
+  claude-in-chrome extension reports "not connected" and macOS `screencapture` errors "could
+  not create image from display" (no screen-recording permission for the terminal) — so
+  `npm run dev` + tsc + vitest is as far as automated verification goes here; UI changes need
+  the user to eyeball the running app themselves before calling a UI task done.
 - **Background agents `git add` the whole tree.** Seen twice now (a scaffold-review fork, then a
   verification subagent) — despite explicit "don't stage" instructions. Not a commit. `git reset`
   (no `--hard`) unstages cleanly. Assume any subagent may stage; check `git status` after they run.

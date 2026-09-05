@@ -409,6 +409,7 @@ button:hover {
 
 .agent {
   border: 1px solid #2a2b45;
+  border-left-width: 3px;
   border-radius: 4px;
   padding: 8px;
   margin-bottom: 8px;
@@ -446,11 +447,33 @@ button:hover {
   opacity: 0.4;
 }
 
+.raw-log-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.raw-log-filter {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #8a8db5;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
 .log-line {
   white-space: pre-wrap;
   word-break: break-all;
   border-bottom: 1px solid #1e1f38;
-  padding: 2px 0;
+  border-left: 3px solid transparent;
+  padding: 2px 0 2px 6px;
+}
+
+.log-line .log-agent {
+  font-weight: 600;
 }
 
 .log-line .kind {
