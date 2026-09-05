@@ -5,17 +5,25 @@ The spec is `VISION.md`. The always-on rules are `CLAUDE.md`.
 
 ## Next up
 
-**Phase 2 — Parallel.** Phase 1 is done (verified 2026-09-05, see Done). The core bet:
-N concurrent agents readable at a glance, subagent tethering (nesting made visible instead of
-inferred from transcript indentation), the town overview (every project a building, all agents
-as dots — the "am I done?" zoom), and a visible rate-limit / budget gauge (PP/Money in VISION's
-glance table). This is the phase that proves or kills the thesis.
+**Phase 2 — Parallel.** Phase 1 done (verified 2026-09-05). Slice 1 (multi-agent map
+legibility) done 2026-09-05 (see Done). Remaining slices, in order:
 
-**Start here — pick the first Phase 2 slice.** Likely order: (1) make the map read well with
-several agents at once — the current Route label overlap (see Gotchas / the 2026-09-05 verify
-entry) is the first thing that breaks with >1 parked agent; (2) subagent tethering, which needs
-the `translate` layer to emit a parent/child link when the SDK dispatches a Task; (3) town
-overview as a new zoom level; (4) the budget gauge. Confirm scope with the user before building.
+**Start here — Slice 2: subagent tethering.** Make nesting visible instead of inferred from
+transcript indentation. A one-off subagent should render tethered to (and following) its parent
+sprite. Concretely: (a) `src/agent/translate.ts` needs to emit a parent→child link when the SDK
+dispatches a `Task` tool call — the `Task` tool-use carries the subagent prompt; the child's own
+stream arrives under a different session id. Find where translate sees `Task` and thread a
+`parentAgentId` through. (b) The event schema (`src/core/events.ts`) needs the parent id on
+`agent.spawned` (or a new `agent.tethered` event — decide based on whether the parent is known
+at spawn time). (c) The reducer (`src/core/reducer.ts`) stores it on `AgentState`. (d)
+`WorldMap.tsx` draws a line from child to parent and offsets the child's cell position toward
+the parent. Watch: a subagent's `agent.spawned` may arrive before or after the parent's `Task`
+`tool.started` — the reducer must tolerate either order (same lesson as the follow-up feature's
+out-of-order replay guard).
+
+Then: (3) town overview as a new zoom level (every project a building, agents as dots — the
+"am I done?" zoom); (4) visible rate-limit / budget gauge (PP/Money in VISION's glance table).
+Confirm scope with the user before building each.
 
 Then, in rough priority order:
 - Swap the hand-rolled `Markdown.tsx` for `react-markdown` **only if** the transcript becomes
@@ -50,6 +58,15 @@ Reference notes:
 
 ## Done
 
+- **2026-09-05** — **Phase 2 Slice 1: multi-agent map legibility** — `WorldMap.tsx` now tiles
+  each room's interior into one non-overlapping cell per agent (`tileRoom()`: columns sized from
+  room width, rows capped so each keeps ~50px vertical; past the cap, columns narrow instead of
+  rows compressing) and truncates every label to its own cell width (`fitMono()`, replacing the
+  fixed 36-char cut). N agents sharing a location — the Route especially — no longer overprint
+  each other's name/bubble labels. Verified live in Chrome (stub technique) across 3 scenarios:
+  3 on the Route, a mixed 9-agent crowd, and 8 forced into one room (4×2 grid). tsc clean, 120
+  tests pass (no new tests — Pixi render logic, not unit-testable reducer code; covered by live
+  verification). Only `WorldMap.tsx` changed.
 - **2026-09-05** — **Phase 1 end-to-end verification — Phase 1 declared done, moving to
   Phase 2.** Two-part check. (1) Real pipeline, headless: `npm run spike` ran a real Builder
   (`claude` 2.1.261) against a throwaway repo — walked Library→Forge→Gym, raised real
@@ -211,6 +228,14 @@ Reference notes:
   `totalLines`) at face value. Forced by two independent live bugs this session (Grep's
   `numFiles`, Read's `numLines` — see Gotchas): a field named `numLines` is not proof it counts
   lines correctly, so anywhere the raw content is also available, count it ourselves.
+- **2026-09-05** — Map sprite layout is a **computed tiling** (`tileRoom()`), not fixed
+  `x + col*74` offsets. When a room holds more agents than fit in its row budget, **columns get
+  narrower and labels truncate** rather than rows compressing — stacked rows overprinting each
+  other's labels is the worse failure, and a too-narrow-but-readable-on-click sprite is fine.
+- **2026-09-05** — Map labels truncate to **their own cell width** (`fitMono()`), not a global
+  char cap. A label centred in a cell that doesn't overlap its neighbours physically cannot
+  reach another sprite's label — that non-overlap is the real collision fix; `clampCenteredX()`
+  only ever handled the canvas edge, never siblings.
 - **2026-09-05** — Per-agent colour is a **pure hash of `agentId` → hue**, not a registry/palette
   assigned at spawn time — no state to keep in sync, and it survives a reload since it's derived
   from the id alone. Rendered as `hsl(h, 65%, 65%)` everywhere (CSS and Pixi both parse it), so
@@ -315,6 +340,13 @@ _Things learned the hard way. One line each — what broke, and what fixed it._
   1 verification; that stub also exposed a `window.__ask(ask)` helper that calls the
   `onPermissionAsk` handler directly, which is how the encounter dialog got driven. Helper names
   are arbitrary per throwaway — this run used `__push` / `__ask`._
+- **Map label collision with >1 agent per location was two bugs, not one** (fixed 2026-09-05,
+  Phase 2 Slice 1). (1) Column spacing was a fixed 74px but the thought bubble truncated at 36
+  chars (~200px), so any two agents in a room overlapped labels — fixed by tiling the room into
+  non-overlapping cells and truncating each label to *its cell's* width. (2) First fix attempt
+  capped row height at 46px; a sprite + name-below (`+12`) + thought-above (`-26`) needs ~50px,
+  so a second row's thought bubble overprinted the first row's names — fixed by never
+  compressing rows below `SLOT_ROW_H` (50) and narrowing columns instead once a room is crowded.
 - **A real agent's first `Read`/`Edit` of a file often fails with a relative path** and it
   immediately retries with an absolute one (Claude Code requires absolute paths). Confirmed in
   the 2026-09-05 spike: `add.js` and `add.test.js` each logged a failed `Read` (`ok: false`)

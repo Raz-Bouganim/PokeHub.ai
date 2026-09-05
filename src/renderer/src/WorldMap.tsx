@@ -131,6 +131,45 @@ function clampCenteredX(containerX: number, textWidth: number): number {
   return Math.min(Math.max(centered, minX), maxX);
 }
 
+/** Preferred slot size. Width: below this, agents pack tighter rather than add
+ *  a row. Height: a sprite plus a name below plus a thought above needs ~50px
+ *  of vertical room; rows never compress past this — instead columns get
+ *  narrower (labels truncate) so stacked rows can't overprint each other. */
+const SLOT_MIN_W = 66;
+const SLOT_ROW_H = 50;
+
+/** Tile a room's interior into one non-overlapping cell per agent. Labels
+ *  truncated to their own cell width then can't collide with a neighbour —
+ *  the whole fix for "N agents on the Route render on top of each other"
+ *  (`clampCenteredX` only ever handled the canvas edge, not siblings). */
+function tileRoom(
+  n: number,
+  innerW: number,
+  innerH: number,
+): { cols: number; cellW: number; cellH: number } {
+  const maxRows = Math.max(1, Math.floor(innerH / SLOT_ROW_H));
+  let cols = Math.max(1, Math.min(n, Math.floor(innerW / SLOT_MIN_W)));
+  let rows = Math.max(1, Math.ceil(n / cols));
+  if (rows > maxRows) {
+    rows = maxRows;
+    cols = Math.ceil(n / rows);
+  }
+  return {
+    cols,
+    cellW: innerW / cols,
+    cellH: rows > 1 ? innerH / rows : innerH,
+  };
+}
+
+/** Monospace glyphs are ~0.6em wide; trim `text` (with an ellipsis) to fit
+ *  `maxPx` at `fontSize`. Keeps every label inside its own cell. */
+function fitMono(text: string, maxPx: number, fontSize: number): string {
+  const maxChars = Math.floor(maxPx / (fontSize * 0.6));
+  if (text.length <= maxChars) return text;
+  if (maxChars < 2) return "";
+  return `${text.slice(0, maxChars - 1)}…`;
+}
+
 function renderAgents(
   layer: Container,
   sprites: Map<string, Sprite>,
@@ -148,11 +187,14 @@ function renderAgents(
   const seen = new Set<string>();
   for (const [loc, arr] of byLoc) {
     const room = ROOMS[loc] ?? ROOMS.route;
-    const perRow = Math.max(1, Math.floor((room.w - 30) / 74));
+    const innerW = room.w - 24;
+    const innerTop = room.y + 26;
+    const innerH = room.h - 34;
+    const { cols, cellW, cellH } = tileRoom(arr.length, innerW, innerH);
     arr.forEach((a, i) => {
       seen.add(a.id);
-      const col = i % perRow;
-      const rowN = Math.floor(i / perRow);
+      const col = i % cols;
+      const rowN = Math.floor(i / cols);
       let s = sprites.get(a.id);
       if (!s) {
         s = makeSprite();
@@ -165,9 +207,10 @@ function renderAgents(
         layer.addChild(s.container);
         sprites.set(a.id, s);
       }
-      // Snap to truth. No tween — see file header.
-      s.container.x = room.x + 34 + col * 74;
-      s.container.y = room.y + 52 + rowN * 48;
+      // Snap to truth. No tween — see file header. Sprite sits at the centre
+      // of its (non-overlapping) cell; a single row uses the full room height.
+      s.container.x = room.x + 12 + cellW * (col + 0.5);
+      s.container.y = innerTop + cellH * (rowN + 0.5);
       s.container.alpha =
         a.status === "exited" ? 0.4 : a.status === "idle" ? 0.7 : 1;
 
@@ -186,11 +229,12 @@ function renderAgents(
         s.body.circle(0, 0, 16).stroke({ width: 1.5, color: 0x9aa0d8, alpha: 0.9 });
       }
 
-      s.name.text = a.name;
+      // Truncate each label to its own cell so it can't reach a neighbour.
+      s.name.text = fitMono(a.name, cellW - 6, 10);
       s.name.x = clampCenteredX(s.container.x, s.name.width);
 
-      const bubble = bubbleText(a);
-      s.thought.text = bubble.length > 36 ? `${bubble.slice(0, 35)}…` : bubble;
+      const bubble = fitMono(bubbleText(a), cellW - 6, 9);
+      s.thought.text = bubble;
       s.thought.visible = bubble.length > 0;
       s.thought.x = clampCenteredX(s.container.x, s.thought.width);
     });
