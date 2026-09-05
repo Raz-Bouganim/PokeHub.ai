@@ -8,15 +8,17 @@ The spec is `VISION.md`. The always-on rules are `CLAUDE.md`.
 **Phase 1 — Legibility.** Goal for the phase: full room set for one project, encounter-style
 permission dialog, journal with diffs, raw-stream toggle — and it must genuinely beat a
 terminal for a *single* agent. Follow-up interaction + full-text capture + agent-focus view +
-per-agent raw-log filter/colour + journal with diffs + cwd normalization all landed.
+per-agent raw-log filter/colour + journal with diffs + cwd normalization + room-set/encounter-
+dialog audit (two real legibility bugs found and fixed) all landed. Phase 1's checklist now
+reads as essentially complete.
 
-**Start here — full room-set polish, encounter-dialog polish.** The next Phase 1 item queued
-below "Start here" from the last few sessions. claude-in-chrome is now connected (reconnected
-mid-session on 2026-09-05, see Gotchas) so this is the first UI task in a while that can be
-**visually verified live** via `npm run dev` at `localhost:5173`, not just tsc + vitest —
-actually drive it through Chrome rather than asking the user to eyeball it.
+**Start here — decide whether Phase 1 is actually done and move to Phase 2, or find what's
+still missing.** Re-read the Phase 1 bar in CLAUDE.md/VISION.md, then spawn 1-2 real agents via
+`npm run dev` + the actual Electron window (not Chrome — Chrome can't drive it, see Gotchas) to
+sanity-check the whole pipeline end to end one more time before declaring it done. If it holds,
+move to Phase 2 (N concurrent agents, subagent tethering, town overview, rate-limit budget).
 
-Then, in rough priority order (all Phase 1):
+Then, in rough priority order:
 - Swap the hand-rolled `Markdown.tsx` for `react-markdown` **only if** the transcript becomes
   central and the mini-renderer's gaps (nested lists, task lists) start to bite. Not now.
 - UI refactor / real art is **Phase 3**, not now — acknowledged and deferred on purpose.
@@ -49,6 +51,22 @@ Reference notes:
 
 ## Done
 
+- **2026-09-05** — **Room-set/encounter-dialog audit + two map legibility fixes** (Phase 1).
+  Drove the renderer live through Chrome using a synthetic `window.pokehub` stub (see
+  Gotchas) rather than asking the user to eyeball it. Found the room set (Library/Forge/
+  Gym/Center + Route) and the encounter dialog already functionally complete — multi-agent
+  layout, status tinting, per-agent accent rings, selection highlight, queued asks, and
+  `canRemember`-gated buttons all work correctly. Fixed two real bugs in `WorldMap.tsx`: (1)
+  the `⏸` pending-permission glyph rendered as a tofu box in Pixi's canvas-drawn monospace
+  font — replaced with plain text (`wait: <tool>`); (2) a long agent name or thought bubble
+  centered on a sprite near the canvas edge rendered partly or fully off-screen — new
+  `clampCenteredX()` keeps both labels' absolute screen position inside the canvas margins.
+  Also investigated and **ruled out** a third apparent bug (an exited agent's name label not
+  rendering at all) — isolation testing showed it only occurs when many agents are pushed in
+  a single synchronous batch (a test-harness artifact), not under normal one-event-at-a-time
+  usage; not fixed, since there was nothing real to fix. tsc clean, 120 tests pass (no new
+  tests — this was a rendering/visual fix, covered by live verification, not unit-testable
+  reducer logic).
 - **2026-09-05** — **cwd field normalization** (Phase 1, prior session's "start here"). New
   `normalizeCwd()` in `main/index.ts`: `.trim()`s the composer's folder input and expands a
   leading `~`/`~/` to `os.homedir()` before it reaches `spawnAgent`/`query()`. tsc clean, 120
@@ -140,6 +158,12 @@ Reference notes:
 
 ## Decisions
 
+- **2026-09-05** — Chasing the "exited agent's name label doesn't render" lead stopped once
+  isolation testing (a lone agent spawned+exited in its own tick) rendered fine — the failure
+  only reproduced under a 12-agent single-tick synthetic batch, a load pattern real usage never
+  produces (real agents spawn one at a time, each its own IPC round-trip). Recorded as a
+  gotcha, not fixed — there is nothing confirmed-real to fix, and a speculative fix for an
+  unreproduced cause would be guessing.
 - **2026-09-05** — `normalizeCwd()` only handles the two forms actually seen live (`~` alone,
   `~/rest`), not arbitrary `~user/...` — Node's own `os.homedir()` only resolves the *current*
   user's home, and no live failure has involved another user's tilde form. Cheapest fix for the
@@ -253,6 +277,39 @@ Reference notes:
 
 _Things learned the hard way. One line each — what broke, and what fixed it._
 
+- **claude-in-chrome cannot drive the real Electron window** — it automates Chrome tabs only,
+  and the Electron `BrowserWindow` isn't one. It CAN drive the plain-browser fallback
+  (`npm run dev` at `localhost:5173`), but that has no `window.pokehub` bridge, so the world is
+  always empty. **Working technique to still visually verify the map/encounter dialog with
+  real-looking data:** temporarily add `src/renderer/public/pokehub-stub.js` (a self-contained
+  IIFE that defines `window.pokehub` with a fake `spawnAgent`/`worldSnapshot`/`onAgentEvent`/
+  `onPermissionAsk`, plus a `window.__pokehubPush(event)` helper that feeds the reducer) and
+  reference it with `<script src="/pokehub-stub.js">` **before** the `main.tsx` module script
+  in `src/renderer/index.html` (must be a separate file, not an inline `<script>` — the CSP is
+  `script-src 'self'`, no `'unsafe-inline'`). Reload the tab, then push real `PokeHubEvent`
+  objects via `javascript_tool` to drive any scenario (multi-agent rooms, permission asks,
+  exited/erroring states) without touching a real repo or spending real API usage. **Delete the
+  stub file and revert the `index.html` script tag when done** — same throwaway-script
+  convention as `scripts/_dump-<x>.mjs`, not part of the app.
+- **A single synthetic batch of many agents pushed in one JS tick can make a Pixi `Text` label
+  silently fail to render** (confirmed live: 12 agents pushed via one `javascript_exec` call,
+  one exited agent's name never appeared on the map despite every inspectable Pixi property —
+  `.text`, `.visible`, `.renderable`, `.alpha`, `.destroyed`, parent — reporting correct,
+  visible values). An isolated single-agent spawn+exit in its own tick rendered fine. Treated
+  as a synthetic-load artifact (React batching many `setWorld` calls into one giant Pixi frame
+  with a dozen simultaneous new `Text` rasterizations), not a real bug — real agents spawn one
+  IPC event at a time. If a sprite's label ever goes missing in **real** use, this is the first
+  thing to rule back in.
+- **Pixi's canvas-drawn `fontFamily: "monospace"` text has no glyph for `⏸` (or presumably other
+  emoji/symbol marks) — renders as a tofu box, invisible at a glance.** Confirmed live in
+  `WorldMap.tsx`'s thought bubble. The DOM/HTML panels (`App.tsx`, `AgentFocus.tsx`) don't have
+  this problem — the browser's own emoji font fallback covers `⏸ 💭 ✓ ✕ ◌`, so this is specific
+  to Pixi `Text` objects on the canvas. Fix: plain ASCII text only inside the map.
+- **A Pixi sprite label centered on its container (`x = -width/2`) can render partly or fully
+  off the visible canvas** when the sprite sits near the left/right edge and the label is wide
+  (a long agent name, or an untruncated thought bubble) — confirmed live, text simply vanished
+  past x=0. Fix: `clampCenteredX()` in `WorldMap.tsx` clamps the label's local x so
+  `container.x + x` and `container.x + x + width` both stay inside `[margin, W - margin]`.
 - **claude-in-chrome was disconnected for most of this session, then reconnected mid-session
   (2026-09-05)** via `/mcp` — the earlier "not connected" state (and macOS `screencapture`
   lacking screen-recording permission) meant `npm run dev` + tsc + vitest was as far as

@@ -32,8 +32,9 @@ after the spike.
 
 ## Current phase
 **Phase 1 — Legibility.** Follow-up interaction + full assistant-text capture + agent-focus
-view + per-agent raw-stream filter + journal with diffs have landed. Remaining: full room set
-for one project, encounter-dialog polish. Bar: it beats a terminal for a *single* agent. Real
+view + per-agent raw-stream filter + journal with diffs + room set + encounter dialog have
+landed. Checklist reads complete; next session confirms it end-to-end via a real agent before
+calling Phase 1 done and moving to Phase 2. Bar: it beats a terminal for a *single* agent. Real
 art / UI polish is Phase 3, not now.
 
 ## Session hygiene

@@ -79,7 +79,10 @@ function makeSprite(): Sprite {
 /** One line of ambient status when there is no explicit thought. */
 function bubbleText(a: ReturnType<typeof agentList>[number]): string {
   if (a.thought) return a.thought;
-  if (a.pendingPermissions[0]) return `⏸ ${a.pendingPermissions[0].tool}`;
+  // Pixi's canvas-drawn "monospace" font has no glyph for pause/emoji marks
+  // (renders as a tofu box) — plain text only inside the map, unlike the DOM
+  // panels which get the browser's emoji fallback.
+  if (a.pendingPermissions[0]) return `wait: ${a.pendingPermissions[0].tool}`;
   if (a.activeTools[0]) return a.activeTools[0].tool;
   if (a.exitReason) return a.exitReason;
   if (a.status === "idle") return "· idle ·";
@@ -112,6 +115,20 @@ function drawRooms(stage: Container): void {
     rooms.addChild(label);
   }
   stage.addChild(rooms);
+}
+
+const CANVAS_MARGIN = 4;
+
+/** A name/thought label is centered on its sprite by default, but a long
+ *  string on a sprite near the canvas edge would center itself straight off
+ *  the visible stage — confirmed live with a long agent name and a long
+ *  thought bubble in the leftmost column. Clamp the label's local x so its
+ *  absolute screen position always stays inside [margin, W - margin]. */
+function clampCenteredX(containerX: number, textWidth: number): number {
+  const centered = -textWidth / 2;
+  const minX = CANVAS_MARGIN - containerX;
+  const maxX = W - CANVAS_MARGIN - containerX - textWidth;
+  return Math.min(Math.max(centered, minX), maxX);
 }
 
 function renderAgents(
@@ -170,12 +187,12 @@ function renderAgents(
       }
 
       s.name.text = a.name;
-      s.name.x = -s.name.width / 2;
+      s.name.x = clampCenteredX(s.container.x, s.name.width);
 
       const bubble = bubbleText(a);
       s.thought.text = bubble.length > 36 ? `${bubble.slice(0, 35)}…` : bubble;
       s.thought.visible = bubble.length > 0;
-      s.thought.x = -s.thought.width / 2;
+      s.thought.x = clampCenteredX(s.container.x, s.thought.width);
     });
   }
 
