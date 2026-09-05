@@ -1,0 +1,236 @@
+.focusPanel {
+  flex: 0 1 auto;
+  max-height: 55%;
+  display: flex;
+  flex-direction: column;
+  border-color: var(--border-focus);
+}
+
+.focusHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.focusHead button {
+  padding: 2px 8px;
+}
+
+.focusMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: var(--fg-dim);
+  margin-bottom: 10px;
+}
+
+.hp {
+  margin-bottom: 10px;
+}
+
+.hpLabel {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg-dim);
+}
+
+.hpTrack {
+  height: 8px;
+  border-radius: 4px;
+  margin: 4px 0 2px;
+}
+
+.hpTrackEmpty {
+  border: 1px dashed var(--border-strong);
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 5px,
+    rgba(74, 77, 143, 0.18) 5px,
+    rgba(74, 77, 143, 0.18) 10px
+  );
+}
+
+.hpNote {
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+
+.focusTools {
+  margin-bottom: 10px;
+}
+
+.focusToolsHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.focusTools strong {
+  color: var(--fg-dim);
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+
+.toolTrail {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tool {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.toolDot {
+  width: 1em;
+  text-align: center;
+  flex: none;
+}
+
+.toolOk .toolDot {
+  color: var(--status-ok);
+}
+
+.toolBad .toolDot {
+  color: var(--status-bad);
+}
+
+.toolActive .toolDot {
+  color: var(--status-active);
+}
+
+/* A journal call whose owning agent exited before its tool.finished arrived —
+   distinct from toolActive's "still running" so a dead agent can't read as
+   live. */
+.toolUnresolved .toolDot {
+  color: var(--fg-muted);
+}
+
+.toolName {
+  color: var(--fg-bright);
+}
+
+.toolTarget {
+  color: var(--fg-dim);
+  word-break: break-all;
+}
+
+.focusTabs {
+  display: flex;
+  gap: 4px;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 8px;
+}
+
+.focusTabs button {
+  padding: 3px 10px;
+  font-size: 11px;
+  background: transparent;
+  border-color: var(--border-subtle);
+  color: var(--fg-dim);
+}
+
+.focusTabs button.tabActive {
+  background: var(--btn-bg);
+  border-color: var(--border-strong);
+  color: inherit;
+}
+
+.transcript,
+.journal {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-top: 8px;
+}
+
+.journalTurn {
+  margin-bottom: 10px;
+}
+
+.journalTurnHead {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg-dim);
+  margin-bottom: 4px;
+}
+
+.journalList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.journalEntry {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  border-left: 2px solid transparent;
+  padding-left: 6px;
+}
+
+/* Read vs. write is a distinct signal from ok/fail (the dot colour) — VISION
+   "files read vs. modified must be visually distinct, not just labelled". */
+.journalRead {
+  border-left-color: var(--journal-read);
+}
+
+.journalWrite {
+  border-left-color: var(--journal-write);
+}
+
+.journalOther {
+  border-left-color: var(--border-strong);
+}
+
+.journalSummary {
+  color: var(--status-ok);
+  font-variant-numeric: tabular-nums;
+}
+
+.toolBad .journalSummary {
+  color: var(--status-bad);
+}
+
+.turn {
+  margin-bottom: 10px;
+}
+
+.turnRole {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg-dim);
+  margin-bottom: 2px;
+}
+
+.turnUser .turnRole {
+  color: var(--status-ok);
+}
+
+.turnText {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.turnUser .turnText {
+  color: var(--fg-bright);
+}
+
+.muted {
+  color: var(--fg-muted);
+}

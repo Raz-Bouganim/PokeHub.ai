@@ -1,0 +1,27 @@
+/* Own box with a fixed aspect ratio so the canvas can never collapse to 0
+   height while Pixi is still initialising (or if it fails). */
+.host {
+  position: relative;
+  width: 100%;
+  max-width: 600px;
+  aspect-ratio: 600 / 440;
+  background: var(--bg);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.host canvas {
+  display: block;
+  border-radius: 4px;
+}
+
+.error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  text-align: center;
+  color: var(--status-bad);
+}

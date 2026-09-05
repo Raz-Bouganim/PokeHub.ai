@@ -1,17 +1,32 @@
-import { useEffect, useRef, useState } from "react";
-import type { PokeHubEvent } from "../../core/events.ts";
-import type { PermissionAskEnvelope } from "../../shared/ipc.ts";
-import type { PermissionDecision } from "../../shared/permissions.ts";
+/**
+ * The app shell: composer bar, the map + agent-list panels, the focus panel,
+ * the raw-log panel, and the encounter modal. Reads world state from `useWorld`
+ * and drives everything else through `window.pokehub`.
+ *
+ * Not unit-tested — React render; verified live via the stub (PROGRESS.md).
+ */
+
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { knownClasses } from "../../core/agent-class/registry.ts";
+import type { PokeHubEvent } from "../../core/events.ts";
 import { agentList } from "../../core/selectors.ts";
 import { agentColor } from "../../core/text/agent-color.ts";
+import type { PermissionAskEnvelope } from "../../shared/ipc.ts";
+import type { PermissionDecision } from "../../shared/permissions.ts";
+import { AgentFocus } from "./AgentFocus.tsx";
+import styles from "./App.module.css";
+import { cx } from "./cx.ts";
 import { useWorld } from "./use-world.ts";
 import { WorldMap } from "./WorldMap.tsx";
-import { AgentFocus } from "./AgentFocus.tsx";
 
 const CLASSES = knownClasses();
 
-export function App() {
+/** CSS custom property carrying an agent's identity colour to its stylesheet. */
+function agentColorVar(agentId: string): CSSProperties {
+  return { "--agent-color": agentColor(agentId) } as CSSProperties;
+}
+
+export function App(): JSX.Element {
   const { world, log } = useWorld();
   const [name, setName] = useState("Rowan");
   const [agentClass, setAgentClass] = useState(CLASSES[0] ?? "Builder");
@@ -41,7 +56,7 @@ export function App() {
   // A known-exited agent can't take another turn, so fall back to spawning.
   const followMode = selectedId !== null && selected?.status !== "exited";
 
-  const send = async () => {
+  const send = async (): Promise<void> => {
     if (!prompt.trim() || sending.current) return;
     sending.current = true;
     setNotice(null);
@@ -75,7 +90,7 @@ export function App() {
     }
   };
 
-  const answer = (decision: PermissionDecision) => {
+  const answer = (decision: PermissionDecision): void => {
     const head = askQueue[0];
     if (!head) return;
     window.pokehub.answerPermission({ id: head.id, decision });
@@ -93,8 +108,8 @@ export function App() {
       : "spawn agent";
 
   return (
-    <div className="app">
-      <div className="bar">
+    <div className={styles.app}>
+      <div className={styles.bar}>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -116,7 +131,7 @@ export function App() {
           value={cwd}
           onChange={(e) => setCwd(e.target.value)}
           placeholder="/absolute/repo/path"
-          style={{ width: 260 }}
+          className={styles.cwdInput}
           disabled={followMode}
         />
         <textarea
@@ -135,16 +150,16 @@ export function App() {
       </div>
 
       {(notice !== null || selected?.status === "exited") && (
-        <div className="bar" style={{ marginTop: -4 }}>
-          <span style={{ color: "#ffcf5c" }}>
+        <div className={styles.notice}>
+          <span className={styles.noticeText}>
             {notice ??
               `${selected?.name ?? "the agent"} has exited — sending will spawn a new agent`}
           </span>
         </div>
       )}
 
-      <div className="left">
-        <div className="panel map-panel">
+      <div className={styles.left}>
+        <div className={cx("panel", styles.mapPanel)}>
           <h2>Map</h2>
           <WorldMap world={world} selectedId={selectedId} onSelect={setSelectedId} />
         </div>
@@ -155,13 +170,12 @@ export function App() {
           </h2>
           {agentList(world).map((a) => (
             <div
-              className={`agent${a.id === selectedId ? " selected" : ""}`}
+              className={cx(styles.agent, a.id === selectedId && styles.selected)}
               key={a.id}
               onClick={() => setSelectedId(a.id)}
-              style={{ borderLeftColor: agentColor(a.id) }}
+              style={agentColorVar(a.id)}
             >
-              <strong style={{ color: agentColor(a.id) }}>{a.name}</strong>{" "}
-              <span>({a.agentClass})</span>
+              <strong className={styles.agentName}>{a.name}</strong> <span>({a.agentClass})</span>
               {" — "}
               <span className="room">{a.location}</span>
               {" · "}
@@ -169,7 +183,7 @@ export function App() {
               {a.promptCount > 1 && <span> · {a.promptCount} turns</span>}
               {a.status !== "exited" && (
                 <button
-                  style={{ marginLeft: 8, padding: "1px 8px" }}
+                  className={styles.stopBtn}
                   onClick={(e) => {
                     e.stopPropagation();
                     window.pokehub.stopAgent(a.id);
@@ -191,13 +205,13 @@ export function App() {
         </div>
       </div>
 
-      <div className="right">
+      <div className={styles.right}>
         {selected && <AgentFocus agent={selected} onClose={() => setSelectedId(null)} />}
-        <div className="panel raw-log">
-          <div className="raw-log-head">
+        <div className={cx("panel", styles.rawLog)}>
+          <div className={styles.rawLogHead}>
             <h2>Raw event log</h2>
             {selectedId && (
-              <label className="raw-log-filter">
+              <label className={styles.rawLogFilter}>
                 <input
                   type="checkbox"
                   checked={logFilterOn}
@@ -213,14 +227,14 @@ export function App() {
               // (agentId, seq) is unique per agent and stable — no array index,
               // or every row's key shifts once the log passes 200.
               <div
-                className="log-line"
+                className={styles.logLine}
                 key={`${e.agentId}-${e.seq}`}
-                style={{ borderLeftColor: agentColor(e.agentId) }}
+                style={agentColorVar(e.agentId)}
               >
-                <span className="log-agent" style={{ color: agentColor(e.agentId) }}>
+                <span className={styles.logAgent}>
                   {world.agents[e.agentId]?.name ?? e.agentId.slice(0, 6)}
                 </span>{" "}
-                <span className="kind">
+                <span className={styles.kind}>
                   {String(e.seq).padStart(3, "0")} {e.kind}
                 </span>{" "}
                 {summarize(e)}
@@ -230,14 +244,14 @@ export function App() {
       </div>
 
       {ask && (
-        <div className="encounter-backdrop">
-          <div className="encounter">
+        <div className={styles.encounterBackdrop}>
+          <div className={styles.encounter}>
             <h2>A wild {ask.ask.tool.toUpperCase()} appeared!</h2>
             <p>
               {ask.ask.agentName} — {ask.ask.title ?? `${ask.ask.tool} wants to run:`}
             </p>
             <pre>{JSON.stringify(ask.ask.input, null, 2)}</pre>
-            <div className="actions">
+            <div className={styles.actions}>
               <button onClick={() => answer("allow_once")}>Allow once</button>
               {ask.ask.canRemember && (
                 <button onClick={() => answer("allow_always")}>Always</button>
@@ -245,7 +259,7 @@ export function App() {
               <button onClick={() => answer("refuse")}>Refuse</button>
             </div>
             {askQueue.length > 1 && (
-              <p style={{ opacity: 0.6 }}>{askQueue.length - 1} more waiting</p>
+              <p className={styles.moreWaiting}>{askQueue.length - 1} more waiting</p>
             )}
           </div>
         </div>

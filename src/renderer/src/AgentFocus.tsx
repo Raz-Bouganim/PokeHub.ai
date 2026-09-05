@@ -6,25 +6,28 @@
  * It is a projection: everything here comes from `world.agents[id]`, nothing is
  * fetched or stored. The transcript is `agent.prompt` + `agent.message` events
  * folded by the reducer, so a reload rebuilds it from the log.
+ *
+ * Not unit-tested — React render; verified live via the stub (PROGRESS.md).
  */
 
 import { useState } from "react";
 import type { AgentState, JournalEntry, RecentTool } from "../../core/world.ts";
+import styles from "./AgentFocus.module.css";
+import { cx } from "./cx.ts";
 import { Markdown } from "./Markdown.tsx";
 
-export function AgentFocus({
-  agent,
-  onClose,
-}: {
+interface AgentFocusProps {
   agent: AgentState;
   onClose: () => void;
-}): JSX.Element {
+}
+
+export function AgentFocus({ agent, onClose }: AgentFocusProps): JSX.Element {
   const turns = agent.transcript;
   const [tab, setTab] = useState<"conversation" | "journal">("conversation");
 
   return (
-    <div className="panel focus-panel">
-      <div className="focus-head">
+    <div className={cx("panel", styles.focusPanel)}>
+      <div className={styles.focusHead}>
         <h2>
           {agent.name} · {agent.agentClass} ·{" "}
           <span className={`status-${agent.status}`}>{agent.status}</span>
@@ -34,7 +37,7 @@ export function AgentFocus({
         </button>
       </div>
 
-      <div className="focus-meta">
+      <div className={styles.focusMeta}>
         <span className="room">📍 {agent.location}</span>
         <span>·</span>
         <span>
@@ -52,65 +55,68 @@ export function AgentFocus({
           No real number yet: `session.compacted` is captured but not turned into
           a percentage. Rendered as an explicit placeholder, not a full bar that
           could be mistaken for "100% left". */}
-      <div className="hp">
-        <div className="hp-label">HP · context remaining</div>
-        <div className="hp-track hp-track--empty" />
-        <div className="hp-note">not yet measured</div>
+      <div className={styles.hp}>
+        <div className={styles.hpLabel}>HP · context remaining</div>
+        <div className={cx(styles.hpTrack, styles.hpTrackEmpty)} />
+        <div className={styles.hpNote}>not yet measured</div>
       </div>
 
-      <div className="focus-tools">
-        <div className="focus-tools-head">
+      <div className={styles.focusTools}>
+        <div className={styles.focusToolsHead}>
           <strong>recent tools</strong>
           {agent.pendingPermissions[0] && (
             <span className="status-blocked">⏸ awaiting {agent.pendingPermissions[0].tool}</span>
           )}
         </div>
         {agent.recentTools.length === 0 ? (
-          <span className="muted">nothing yet</span>
+          <span className={styles.muted}>nothing yet</span>
         ) : (
-          <ol className="tool-trail">
+          <ol className={styles.toolTrail}>
             {agent.recentTools
               .slice()
               .reverse()
               .map((t) => (
                 <li key={t.toolCallId} className={toolClass(t)}>
-                  <span className="tool-dot">{toolMark(t)}</span>
-                  <span className="tool-name">{t.tool}</span>
-                  {t.target && <span className="tool-target">{t.target}</span>}
+                  <span className={styles.toolDot}>{toolMark(t)}</span>
+                  <span className={styles.toolName}>{t.tool}</span>
+                  {t.target && <span className={styles.toolTarget}>{t.target}</span>}
                 </li>
               ))}
           </ol>
         )}
       </div>
 
-      <div className="focus-tabs">
+      <div className={styles.focusTabs}>
         <button
-          className={tab === "conversation" ? "active" : ""}
+          className={tab === "conversation" ? styles.tabActive : ""}
           onClick={() => setTab("conversation")}
         >
           conversation
         </button>
-        <button className={tab === "journal" ? "active" : ""} onClick={() => setTab("journal")}>
+        <button
+          className={tab === "journal" ? styles.tabActive : ""}
+          onClick={() => setTab("journal")}
+        >
           journal{agent.journal.length > 0 ? ` (${agent.journal.length})` : ""}
         </button>
       </div>
 
       {tab === "conversation" ? (
-        <div className="transcript">
+        <div className={styles.transcript}>
           {agent.transcriptDropped > 0 && (
-            <p className="muted">
+            <p className={styles.muted}>
               {agent.transcriptDropped} earlier turn
               {agent.transcriptDropped === 1 ? "" : "s"} — in the log, not shown
             </p>
           )}
-          {turns.length === 0 && <p className="muted">No conversation yet.</p>}
+          {turns.length === 0 && <p className={styles.muted}>No conversation yet.</p>}
           {turns.map((t) => (
-            <div className={`turn turn-${t.role}`} key={t.seq}>
-              <div className="turn-role">{t.role === "user" ? "you" : agent.name}</div>
+            <div className={cx(styles.turn, t.role === "user" && styles.turnUser)} key={t.seq}>
+              <div className={styles.turnRole}>{t.role === "user" ? "you" : agent.name}</div>
               {t.role === "assistant" ? (
                 <Markdown text={t.text} />
               ) : (
-                <div className="turn-text">{t.text}</div>
+                <div className={styles.turnText}>{t.text}</div>
               )}
             </div>
           ))}
@@ -137,7 +143,7 @@ function Journal({
   entries: readonly JournalEntry[];
   exited: boolean;
 }): JSX.Element {
-  if (entries.length === 0) return <p className="muted">Nothing yet.</p>;
+  if (entries.length === 0) return <p className={styles.muted}>Nothing yet.</p>;
 
   const byTurn = new Map<number, JournalEntry[]>();
   for (const e of entries) {
@@ -148,22 +154,26 @@ function Journal({
   const turns = [...byTurn.entries()].sort(([a], [b]) => a - b);
 
   return (
-    <div className="journal">
+    <div className={styles.journal}>
       {turns.map(([turn, group]) => (
-        <div className="journal-turn" key={turn}>
-          <div className="journal-turn-head">turn {turn}</div>
-          <ol className="journal-list">
+        <div className={styles.journalTurn} key={turn}>
+          <div className={styles.journalTurnHead}>turn {turn}</div>
+          <ol className={styles.journalList}>
             {group.map((j) => {
               const abandoned = j.ok === null && exited;
               return (
                 <li
                   key={j.toolCallId}
-                  className={`journal-entry journal-${j.kind} ${stateClass(j.ok, abandoned)}`}
+                  className={cx(
+                    styles.journalEntry,
+                    journalKindClass(j.kind),
+                    stateClass(j.ok, abandoned),
+                  )}
                 >
-                  <span className="tool-dot">{stateMark(j.ok, abandoned)}</span>
-                  <span className="tool-name">{j.tool}</span>
-                  {j.target && <span className="tool-target">{j.target}</span>}
-                  {j.summary && <span className="journal-summary">{j.summary}</span>}
+                  <span className={styles.toolDot}>{stateMark(j.ok, abandoned)}</span>
+                  <span className={styles.toolName}>{j.tool}</span>
+                  {j.target && <span className={styles.toolTarget}>{j.target}</span>}
+                  {j.summary && <span className={styles.journalSummary}>{j.summary}</span>}
                 </li>
               );
             })}
@@ -172,6 +182,12 @@ function Journal({
       ))}
     </div>
   );
+}
+
+function journalKindClass(kind: JournalEntry["kind"]): string | undefined {
+  if (kind === "read") return styles.journalRead;
+  if (kind === "write") return styles.journalWrite;
+  return styles.journalOther;
 }
 
 /** In-flight = a hollow ring, done = ✓ / ✕ — shared by the recent-tools trail
@@ -184,9 +200,9 @@ function stateMark(ok: boolean | null, abandoned = false): string {
   return ok ? "✓" : "✕";
 }
 
-function stateClass(ok: boolean | null, abandoned = false): string {
-  if (ok === null) return abandoned ? "tool-unresolved" : "tool-active";
-  return ok ? "tool-ok" : "tool-bad";
+function stateClass(ok: boolean | null, abandoned = false): string | undefined {
+  if (ok === null) return abandoned ? styles.toolUnresolved : styles.toolActive;
+  return ok ? styles.toolOk : styles.toolBad;
 }
 
 function toolMark(t: RecentTool): string {
@@ -194,5 +210,5 @@ function toolMark(t: RecentTool): string {
 }
 
 function toolClass(t: RecentTool): string {
-  return `tool ${stateClass(t.ok)}`;
+  return cx(styles.tool, stateClass(t.ok));
 }

@@ -19,6 +19,7 @@ import type { Location } from "../../core/events.ts";
 import type { AgentStatus, WorldState } from "../../core/world.ts";
 import { agentList } from "../../core/selectors.ts";
 import { agentColor } from "../../core/text/agent-color.ts";
+import styles from "./WorldMap.module.css";
 
 const W = 600;
 const H = 440;
@@ -338,8 +339,8 @@ export function WorldMap({
   }, [world, selectedId]);
 
   return (
-    <div className="map-host" ref={hostRef}>
-      {error && <div className="map-error">map renderer failed: {error}</div>}
+    <div className={styles.host} ref={hostRef}>
+      {error && <div className={styles.error}>map renderer failed: {error}</div>}
     </div>
   );
 }

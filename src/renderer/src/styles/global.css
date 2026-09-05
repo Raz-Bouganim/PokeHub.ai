@@ -1,0 +1,124 @@
+/**
+ * Global styles: the design tokens every component reads, the reset, and the
+ * base look of native form controls. Everything else is a co-located
+ * `*.module.css` next to its component.
+ *
+ * Phase 3 does the real visual pass — these values are placeholders, but they
+ * live in one place so that pass is a token edit, not a hunt.
+ */
+
+:root {
+  color-scheme: dark;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+
+  --bg: #0f1020;
+  --panel-bg: #16172b;
+  --surface-bg: #1a1b30;
+  --surface-sunken: #0c0d1c;
+  --selected-bg: #1b1c34;
+
+  --border-subtle: #2a2b45;
+  --border: #333457;
+  --border-strong: #4a4d8f;
+  --border-focus: #3d3f66;
+  --accent: #6b6ecb;
+
+  --fg: #d7d9e8;
+  --fg-bright: #c8cbe8;
+  --fg-heading: #b9bce4;
+  --fg-dim: #8a8db5;
+  --fg-muted: #6a6d95;
+  --fg-quote: #a9ace0;
+
+  --status-ok: #7fd7a5;
+  --status-warn: #ffcf5c;
+  --status-bad: #ff7a7a;
+  --status-idle: #8f97d8;
+  --status-active: #9aa0d8;
+
+  --journal-read: #6f9fd8;
+  --journal-write: #d8a05c;
+
+  --btn-bg: #2d2f5c;
+  --btn-bg-hover: #3a3d75;
+  --btn-border: #4a4d8f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+button {
+  background: var(--btn-bg);
+  border: 1px solid var(--btn-border);
+  color: inherit;
+  padding: 6px 12px;
+  font: inherit;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: var(--btn-bg-hover);
+}
+
+input,
+textarea,
+select {
+  background: var(--surface-bg);
+  border: 1px solid var(--border);
+  color: inherit;
+  padding: 6px 8px;
+  font: inherit;
+  border-radius: 4px;
+}
+
+input:disabled,
+textarea:disabled,
+select:disabled {
+  opacity: 0.4;
+}
+
+/* App-wide primitives shared by more than one component. */
+
+.panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 10px;
+  overflow: auto;
+}
+
+.panel h2 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fg-dim);
+}
+
+/* A room name, wherever it is shown. */
+.room {
+  color: var(--status-ok);
+}
+
+/* Agent status label colour — the string is `status-${agent.status}`, built in
+   two components, so these stay global utilities. */
+.status-blocked {
+  color: var(--status-warn);
+}
+
+.status-erroring {
+  color: var(--status-bad);
+}
+
+.status-idle {
+  color: var(--status-idle);
+}
