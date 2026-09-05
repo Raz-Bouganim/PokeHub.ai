@@ -30,7 +30,7 @@ import {
  *  "N earlier turns are in the log" — an equality with the cap would lie at
  *  exactly `TRANSCRIPT_LIMIT` turns, when nothing has been dropped yet. */
 function withTurn(
-  transcript: TranscriptEntry[],
+  transcript: readonly TranscriptEntry[],
   entry: TranscriptEntry,
 ): { transcript: TranscriptEntry[]; dropped: number } {
   const next = [...transcript, entry];
@@ -42,7 +42,7 @@ function withTurn(
 }
 
 /** Append a finished-or-in-flight tool call to the capped recent-tools trail. */
-function withRecentTool(recentTools: RecentTool[], entry: RecentTool): RecentTool[] {
+function withRecentTool(recentTools: readonly RecentTool[], entry: RecentTool): RecentTool[] {
   const next = [...recentTools, entry];
   return next.length > RECENT_TOOLS_LIMIT ? next.slice(next.length - RECENT_TOOLS_LIMIT) : next;
 }
@@ -78,6 +78,16 @@ function blankAgent(id: string): AgentState {
   };
 }
 
+/**
+ * Fold one event into the world. Pure and idempotent: replaying an event whose
+ * `seq` was already applied to its agent returns `state` unchanged (by
+ * reference), which the live feed uses to skip redundant re-renders.
+ *
+ * @param state - the world state to fold onto (never mutated)
+ * @param event - the event to apply
+ * @returns the resulting world state — the same `state` reference when the
+ *          event was a duplicate or changed nothing, otherwise a new object
+ */
 export function reduce(state: WorldState, event: PokeHubEvent): WorldState {
   const prev = state.agents[event.agentId] ?? blankAgent(event.agentId);
 
@@ -321,7 +331,13 @@ function applyToAgent(prev: AgentState, event: PokeHubEvent): AgentState {
   }
 }
 
-/** Fold a whole log into a world. Convenience for replay and tests. */
+/**
+ * Fold a whole log into a world in one call. Convenience for replay and tests.
+ *
+ * @param events - the events to fold, oldest first
+ * @param from   - the world state to start from (typically `initialWorld()`)
+ * @returns the world state after applying every event
+ */
 export function replay(events: Iterable<PokeHubEvent>, from: WorldState): WorldState {
   let state = from;
   for (const event of events) state = reduce(state, event);

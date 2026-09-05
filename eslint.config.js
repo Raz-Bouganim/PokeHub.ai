@@ -99,6 +99,8 @@ export default tseslint.config(
         "error",
         { allowNumber: true, allowBoolean: true },
       ],
+      // Global default is "warn" during the Phase 1.5 refactor; promoted to
+      // "error" per directory as each slice brings it to spec (see below).
       "@typescript-eslint/explicit-function-return-type": [
         "warn",
         { allowExpressions: true, allowTypedFunctionExpressions: true },
@@ -123,6 +125,18 @@ export default tseslint.config(
     },
   },
   ...boundaryConfigs,
+  {
+    // Directories brought fully to STANDARDS.md §4 — explicit return types on
+    // every export are now enforced, not just warned. Extended per slice.
+    files: ["src/core/**/*.ts"],
+    ignores: ["src/core/**/__tests__/**"],
+    rules: {
+      "@typescript-eslint/explicit-function-return-type": [
+        "error",
+        { allowExpressions: true, allowTypedFunctionExpressions: true },
+      ],
+    },
+  },
   {
     files: ["**/__tests__/**", "**/*.test.{ts,tsx}"],
     rules: {

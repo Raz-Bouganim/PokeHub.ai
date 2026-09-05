@@ -130,7 +130,13 @@ export function AgentFocus({
  *  still `ok: null` apart from one genuinely in flight: the agent is gone, so
  *  a `tool.finished` for it will never arrive — that is not the same fact as
  *  "still running" and must not render as a live spinner. */
-function Journal({ entries, exited }: { entries: JournalEntry[]; exited: boolean }): JSX.Element {
+function Journal({
+  entries,
+  exited,
+}: {
+  entries: readonly JournalEntry[];
+  exited: boolean;
+}): JSX.Element {
   if (entries.length === 0) return <p className="muted">Nothing yet.</p>;
 
   const byTurn = new Map<number, JournalEntry[]>();
