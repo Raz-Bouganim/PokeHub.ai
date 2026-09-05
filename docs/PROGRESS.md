@@ -5,14 +5,13 @@ The spec is `VISION.md`. The always-on rules are `CLAUDE.md`.
 
 ## Next up
 
-**Phase 1.5 (coding standards + refactor) is done — see Done, 2026-09-05.** It lives on branch
-`phase-1.5-coding-standards` (9 commits, `npm run check` + `npm run build` + spike all green,
-129 tests). **Not yet merged to `main`** — review the branch, then `git merge` it before
-starting Phase 2 work. `docs/STANDARDS.md` is now the code-conventions authority (referenced
-from `CLAUDE.md`); follow it for every change.
+**Phase 2 — Parallel.** Phase 1 (Legibility) and Phase 1.5 (coding-standards refactor) are done
+and **merged to `main`** — PR #1, merge commit `91a8bd1` (2026-09-05). `docs/STANDARDS.md` is
+now the code-conventions authority; follow it for every change and keep `npm run check`
+(typecheck + lint `--max-warnings 0` + format:check + test) green before every commit.
+Housekeeping: the local `phase-1.5-coding-standards` branch is merged and can be deleted.
 
-**Phase 2 — Parallel.** Phase 1 done (verified 2026-09-05). Slice 1 (multi-agent map
-legibility) done 2026-09-05 (see Done). Remaining slices, in order:
+Slice 1 (multi-agent map legibility) done 2026-09-05 (see Done). Remaining slices, in order:
 
 **Start here — Slice 2: subagent tethering.** Make nesting visible instead of inferred from
 transcript indentation. A one-off subagent should render tethered to (and following) its parent
@@ -24,8 +23,8 @@ surfaces subagent activity** — likely the *same* `query()` stream tagged with
 throwaway `scripts/_dump-task.mjs` before designing the event. (b) The event schema (`src/core/events.ts`) needs the parent id on
 `agent.spawned` (or a new `agent.tethered` event — decide based on whether the parent is known
 at spawn time). (c) The reducer (`src/core/reducer.ts`) stores it on `AgentState`. (d)
-`WorldMap.tsx` draws a line from child to parent and offsets the child's cell position toward
-the parent. Watch: a subagent's `agent.spawned` may arrive before or after the parent's `Task`
+`src/renderer/src/components/WorldMap.tsx` draws a line from child to parent and offsets the
+child's cell position toward the parent. Watch: a subagent's `agent.spawned` may arrive before or after the parent's `Task`
 `tool.started` — the reducer must tolerate either order (same lesson as the follow-up feature's
 out-of-order replay guard).
 
@@ -34,15 +33,32 @@ Then: (3) town overview as a new zoom level (every project a building, agents as
 Confirm scope with the user before building each.
 
 Then, in rough priority order:
+- **Encounter dialog is below VISION's "killer moment" bar** (found in the 2026-09-05 QA pass):
+  it shows the tool name + `JSON.stringify(input)`, not the bare command with the threatened
+  action quantified ("wants to DELETE 214 files") and no INSPECT button, no agent identity.
+  `components/EncounterDialog.tsx`. Its own small task — the mechanic's whole justification is
+  the risk-surfacing.
+- **Map identity ring is thin / buried** (same QA pass): the per-agent accent ring in
+  `WorldMap.tsx` (1.5px, radius 11) is drowned by the status ring (radius 13) + selection ring
+  (radius 16), and vanishes on `exited` agents (container alpha 0.4). Needs an art-direction
+  call — defer to Phase 3 unless it bites sooner.
 - Swap the hand-rolled `Markdown.tsx` for `react-markdown` **only if** the transcript becomes
   central and the mini-renderer's gaps (nested lists, task lists) start to bite. Not now.
 - UI refactor / real art is **Phase 3**, not now — acknowledged and deferred on purpose.
 
 Reference notes (paths as of the Phase 1.5 refactor — see Done 2026-09-05):
+- `docs/STANDARDS.md` is the code-conventions doc (architecture boundaries, sanctioned design
+  patterns, file org, TS, naming, React, purity, errors, JSDoc, testing). `npm run check` =
+  typecheck + lint (`--max-warnings 0`) + format:check + test; run before every commit.
+  `npm run lint:fix` / `npm run format` autofix. `eslint.config.js` carries the import-boundary
+  table and a few tuned rules (comments explain each).
 - The renderer is `src/renderer/src/`: `App.tsx` (thin shell) + `components/` (WorldMap,
-  AgentFocus, Markdown, Composer, AgentList, RawLog, EncounterDialog — each with a co-located
-  `*.module.css`) + `hooks/` (use-world, use-composer, use-permission-queue) + `styles/global.css`
-  (tokens). The map (`components/WorldMap.tsx`) is a panel *beside* the text world view.
+  AgentFocus, Markdown, Composer, AgentList, RawLog, EncounterDialog, AgentDot — each with a
+  co-located `*.module.css`) + `hooks/` (use-world, use-composer, use-permission-queue) +
+  `styles/global.css` (tokens + shared `.panel`/`.room`/`.status-*`, imported **before** any
+  component module in `main.tsx` so modules can override). The map (`components/WorldMap.tsx`)
+  is a panel *beside* the text world view. `cx.ts` joins class names (CSS Module lookups are
+  `string | undefined`).
 - `npm run spike -- --cwd <repo> --class <Class> --prompt "…"` exercises the whole pipe
   headlessly (no Electron, no map) and prints world state per event — best for debugging the
   reducer. It now `stop()`s itself on the first `agent.turn_finished` (agents no longer
@@ -74,12 +90,11 @@ Reference notes (paths as of the Phase 1.5 refactor — see Done 2026-09-05):
 
 ## Done
 
-- **2026-09-05** — **Phase 1.5 — coding standards + refactor.** Branch
-  `phase-1.5-coding-standards`, 9 commits, one reviewable slice each, `npm run check` +
-  `npm run build` green throughout, 129 tests (was 120), a real-`claude` spike run verifying the
-  pipeline end-to-end, and full live-in-Chrome verification of the renderer (map, focus panel,
-  encounter dialog, composer follow-up, raw-log filter) via the stub. **Not yet merged to
-  `main`.** What landed:
+- **2026-09-05** — **Phase 1.5 — coding standards + refactor. MERGED to `main`** (PR #1, merge
+  `91a8bd1`). Branch `phase-1.5-coding-standards`, 11 commits, one reviewable slice each,
+  `npm run check` + `npm run build` green throughout, 129 tests (was 120), a real-`claude`
+  spike verifying the pipeline end-to-end, full live-in-Chrome renderer verification via the
+  stub, plus a `/code-review` pass (clean) and two agent-run QA passes. What landed:
   - **Tooling** — Prettier (printWidth 100) + flat-config ESLint
     (`typescript-eslint` recommended-type-checked + stylistic, `eslint-plugin-react-hooks`,
     architectural import-boundary rules as `no-restricted-imports`, `eslint-config-prettier`).
@@ -95,6 +110,13 @@ Reference notes (paths as of the Phase 1.5 refactor — see Done 2026-09-05):
   - **Types** — `core/` types deeply `readonly` (the compiler now enforces "the reducer never
     mutates"); explicit return types on every non-trivial function; JSDoc `@param`/`@returns`
     on exports.
+  - **Legibility fix + verify cycle** (last 3 commits) — a QA agent found the per-agent
+    identity colour (`agentColor(id)`, `hsl(h,65%,65%)`) was too faint as text tint and absent
+    from the focus panel. New `<AgentDot>` solid swatch beside every agent name (raw log, agent
+    list, focus header); focus panel gets an `--agent-color` left-border; selected agent-list
+    row keeps its identity stripe; the 4 missing `.status-*` colours added, matched to the map
+    sprite tints. A verification agent then caught that `main.tsx` imported components before
+    `global.css` so the focus stripe was dead code — fixed by importing `global.css` first.
   - Deviations from the plan, both in STANDARDS.md: Prettier printWidth **100** not 80 (the
     source was already ~100); ESLint base is **recommended**-type-checked not strict (strict
     flagged 220 mostly-stylistic issues). A few rules tuned — see `eslint.config.js` comments.
@@ -232,6 +254,36 @@ Reference notes (paths as of the Phase 1.5 refactor — see Done 2026-09-05):
 
 ## Decisions
 
+- **2026-09-05** — **`docs/STANDARDS.md` is the code-conventions authority**, one line from
+  `CLAUDE.md`; it changes only when a convention actually changes, never for status. Settled
+  over 4 rounds of Q&A with the user before any code moved.
+- **2026-09-05** — Prettier **printWidth 100**, ESLint base **`recommendedTypeChecked` +
+  `stylisticTypeChecked`** (not `strict`) — the source was already ~100, and `strict` flagged
+  220 mostly-stylistic issues that aren't this codebase's problem. Both recorded in STANDARDS.md.
+- **2026-09-05** — `AgentSupervisor` is a **class** (not loose module state in `main/index.ts`):
+  one instance, a real "every pending `canUseTool` ask resolves exactly once" invariant, and
+  testable by instantiation. Electron is injected via a `SupervisorHooks` object, never
+  imported — keeps the Tauri-port surface to `index.ts` + preload.
+- **2026-09-05** — Agent classes are **one `AgentClassPolicy` module per class**
+  (`core/agent-class/scout.ts` …) sharing one `bash-guard.ts`. The user chose the strategy-
+  module shape; the class files stay thin (a tool list, maybe a bash policy) and `bash-guard.ts`
+  keeps the hard-won default-deny edge cases in one place.
+- **2026-09-05** — `core/` types are **deeply `readonly`** — the compiler now enforces "the
+  reducer never mutates," previously only a header comment + the test suite. Low friction: the
+  code already built fresh objects/arrays everywhere (`[...xs, x]`, never `.push`).
+- **2026-09-05** — Renderer styling is **CSS Modules per component** + `styles/global.css` for
+  tokens and the three cross-component primitives (`.panel`, `.room`, `.status-*`). `global.css`
+  is imported **first** in `main.tsx` so a module can override a primitive at equal specificity.
+- **2026-09-05** — Agent identity colour is shown as a **solid `<AgentDot>` swatch** next to the
+  name, not by tinting the name text — `hsl(h, 65%, 65%)` sits too close to `--fg` (`#d7d9e8`)
+  for many hues to read against the dark UI. The tint stays as a secondary cue.
+- **2026-09-05** — Text `.status-*` label colours are **matched to `WorldMap`'s `STATUS_TINT`**
+  (working = green, exited = muted grey, …) so a status reads the same in the panels and on the
+  map. Adds the four that had no colour before (`spawning`/`thinking`/`working`/`exited`).
+- **2026-09-05** — The EncounterDialog "killer moment" gap and the buried map identity ring
+  (both surfaced by the QA pass) are **deferred, not fixed** — the encounter one is real
+  feature work (its own task) and the ring one needs an art-direction call (Phase 3). Recorded
+  in Next up so they're not lost.
 - **2026-09-05** — Phase 1 declared done on **split verification** (real pipeline proven
   headless via `npm run spike`; renderer proven live in Chrome via the stub), not a single
   real-agent-through-Electron run — `claude-in-chrome` can't drive the `BrowserWindow`, the two
@@ -363,6 +415,38 @@ Reference notes (paths as of the Phase 1.5 refactor — see Done 2026-09-05):
 
 _Things learned the hard way. One line each — what broke, and what fixed it._
 
+- **CSS Modules lose every equal-specificity tie to `global.css` unless the global sheet is
+  imported first.** `main.tsx` imported `App.tsx` (which transitively pulls in every
+  `*.module.css`) *before* `./styles/global.css`, so `global.css` won the cascade — a module's
+  `.focusPanel { border-left: … }` override of the shared `.panel { border: … }` was silently
+  dead code. Fix: `import "./styles/global.css"` before `import { App }`. Base sheet first,
+  components override. (Caught by a verification agent, not by tsc/lint/build.)
+- **CSS Module class lookups are `string | undefined` under `noUncheckedIndexedAccess`**
+  (`CSSModuleClasses` is a bare index signature). `className={styles.foo}` is fine (React
+  accepts `undefined`), but `` `a ${styles.foo}` `` trips `restrict-template-expressions` and
+  can emit the literal string `"a undefined"`. Fix: a `cx(...parts)` helper
+  (`src/renderer/src/cx.ts`) that filters falsy and joins.
+- **The codebase was hand-formatted at ~100 cols, not 80.** Setting Prettier `printWidth: 80`
+  exploded every multi-key test-fixture object literal → a ~2000-line reflow in the "adopt
+  formatter" commit. Check `awk '{print length}' | sort -rn` across `src/` before picking a
+  width; 100 gave a near-empty diff for the source.
+- **`typescript-eslint` `strictTypeChecked` flags ~220 mostly-stylistic issues on this repo**
+  (`no-non-null-assertion` ×87, `dot-notation` ×57 on index-signature bracket access,
+  `no-confusing-void-expression` ×22 on React arrow handlers). `recommendedTypeChecked` +
+  `stylisticTypeChecked` is the sane "type-checked" baseline; then tune a few
+  (`dot-notation` `allowIndexSignaturePropertyAccess: true`; `require-await: "off"` — `async`
+  is used on purpose to pin a `Promise` return shape on IPC handlers).
+- **Flat-config `no-restricted-imports` import-boundary rules must exempt test files** — a
+  `core/__tests__/*.test.ts` legitimately imports `node:fs`/`node:url` for fixtures. Add
+  `ignores: ["**/__tests__/**", "**/*.test.{ts,tsx}"]` to each boundary config block.
+- **`eslint-plugin-react-hooks` v7 (`react-hooks/refs`) flags writing `ref.current` in the
+  component body.** `WorldMap` set `worldRef.current = world` during render so the async Pixi
+  `init()` callback would see the latest world. Fix: move the ref sync into a `useEffect()`
+  (no dep array) declared *before* the draw effects, so it flushes first.
+- **`git checkout main` with no pathspec switches branches** — `git checkout main --` (empty
+  path list) is treated as `git checkout main`, not a no-op. Left the working tree on `main`
+  mid-session (no loss — commits were on the feature branch). Use `git switch` / `git restore`,
+  which can't be misread, or always give `checkout` an explicit path.
 - **claude-in-chrome cannot drive the real Electron window** — it automates Chrome tabs only,
   and the Electron `BrowserWindow` isn't one. It CAN drive the plain-browser fallback
   (`npm run dev` at `localhost:5173`), but that has no `window.pokehub` bridge, so the world is
