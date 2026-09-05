@@ -17,11 +17,9 @@ import {
 const bridge: PokeHubBridge = {
   spawnAgent: (req: SpawnRequest) => ipcRenderer.invoke(IPC.spawnAgent, req),
 
-  stopAgent: (agentId: string) =>
-    ipcRenderer.send(IPC.stopAgent, { agentId }),
+  stopAgent: (agentId: string) => ipcRenderer.send(IPC.stopAgent, { agentId }),
 
-  followUpAgent: (req: FollowUpRequest) =>
-    ipcRenderer.invoke(IPC.followUpAgent, req),
+  followUpAgent: (req: FollowUpRequest) => ipcRenderer.invoke(IPC.followUpAgent, req),
 
   worldSnapshot: () => ipcRenderer.invoke(IPC.worldSnapshot),
 
@@ -43,8 +41,7 @@ const bridge: PokeHubBridge = {
     return () => ipcRenderer.off(IPC.permissionAsk, listener);
   },
 
-  answerPermission: (answer: PermissionAnswer) =>
-    ipcRenderer.send(IPC.permissionAnswer, answer),
+  answerPermission: (answer: PermissionAnswer) => ipcRenderer.send(IPC.permissionAnswer, answer),
 };
 
 contextBridge.exposeInMainWorld("pokehub", bridge);

@@ -10,16 +10,15 @@ import {
 
 describe("bubbleLine — a longer reply as one bubble line", () => {
   it("takes the first sentence, not the whole first line", () => {
-    expect(
-      bubbleLine("I traced it through the code. Here is the full path, hop by hop."),
-    ).toBe("I traced it through the code.");
+    expect(bubbleLine("I traced it through the code. Here is the full path, hop by hop.")).toBe(
+      "I traced it through the code.",
+    );
   });
 
   it("skips a leading markdown heading and shows the prose under it", () => {
-    const reply = "## Where purity is enforced\n\nIt is not a lint rule — it is what the reducer is given.";
-    expect(bubbleLine(reply)).toBe(
-      "It is not a lint rule — it is what the reducer is given.",
-    );
+    const reply =
+      "## Where purity is enforced\n\nIt is not a lint rule — it is what the reducer is given.";
+    expect(bubbleLine(reply)).toBe("It is not a lint rule — it is what the reducer is given.");
   });
 
   it("skips code fences and blank lines", () => {
@@ -35,15 +34,13 @@ describe("bubbleLine — a longer reply as one bubble line", () => {
   });
 
   it("does not cut on a decimal point", () => {
-    expect(bubbleLine("Bumped to v8.2 today. More soon.")).toBe(
-      "Bumped to v8.2 today.",
-    );
+    expect(bubbleLine("Bumped to v8.2 today. More soon.")).toBe("Bumped to v8.2 today.");
   });
 
   it("does not cut on a common abbreviation", () => {
-    expect(
-      bubbleLine("The router is e.g. in src/app.ts, so I'll edit there."),
-    ).toBe("The router is e.g. in src/app.ts, so I'll edit there.");
+    expect(bubbleLine("The router is e.g. in src/app.ts, so I'll edit there.")).toBe(
+      "The router is e.g. in src/app.ts, so I'll edit there.",
+    );
     expect(bubbleLine("Prefer composition vs. inheritance here. Done.")).toBe(
       "Prefer composition vs. inheritance here.",
     );
@@ -148,8 +145,23 @@ describe("summarizeToolOutput — the journal's +N / -M line", () => {
 
   it("prefers exact gitDiff counts for an edit", () => {
     const out = {
-      structuredPatch: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 2, lines: ["-a", "+b", "+c"] }],
-      gitDiff: { filename: "x.ts", status: "modified", additions: 4, deletions: 1, changes: 5, patch: "" },
+      structuredPatch: [
+        {
+          oldStart: 1,
+          oldLines: 1,
+          newStart: 1,
+          newLines: 2,
+          lines: ["-a", "+b", "+c"],
+        },
+      ],
+      gitDiff: {
+        filename: "x.ts",
+        status: "modified",
+        additions: 4,
+        deletions: 1,
+        changes: 5,
+        patch: "",
+      },
     };
     expect(summarizeToolOutput(out)).toBe("+4 / -1");
   });
@@ -157,7 +169,13 @@ describe("summarizeToolOutput — the journal's +N / -M line", () => {
   it("counts +/- patch lines when there is no gitDiff", () => {
     const out = {
       structuredPatch: [
-        { oldStart: 1, oldLines: 2, newStart: 1, newLines: 3, lines: [" ctx", "-old", "+new1", "+new2"] },
+        {
+          oldStart: 1,
+          oldLines: 2,
+          newStart: 1,
+          newLines: 3,
+          lines: [" ctx", "-old", "+new1", "+new2"],
+        },
       ],
     };
     expect(summarizeToolOutput(out)).toBe("+2 / -1");
@@ -172,7 +190,13 @@ describe("summarizeToolOutput — the journal's +N / -M line", () => {
     // A real quirk confirmed against a live SDK run: content mode reports
     // matches via `numLines` and leaves `numFiles` at 0 even with real hits.
     expect(
-      summarizeToolOutput({ mode: "content", numFiles: 0, filenames: [], numLines: 7, totalLines: 7 }),
+      summarizeToolOutput({
+        mode: "content",
+        numFiles: 0,
+        filenames: [],
+        numLines: 7,
+        totalLines: 7,
+      }),
     ).toBe("7 lines");
   });
 
@@ -188,7 +212,11 @@ describe("summarizeToolOutput — the journal's +N / -M line", () => {
     expect(
       summarizeToolOutput({
         type: "text",
-        file: { content: "line one\nline two\nline three\n", numLines: 4, totalLines: 4 },
+        file: {
+          content: "line one\nline two\nline three\n",
+          numLines: 4,
+          totalLines: 4,
+        },
       }),
     ).toBe("3 lines");
   });

@@ -117,54 +117,47 @@ function createWindow(): void {
   mainWindow = win;
 }
 
-app.whenReady().then(() => {
+void app.whenReady().then(() => {
   createWindow();
 
-  ipcMain.handle(
-    IPC.spawnAgent,
-    async (_evt, req: SpawnRequest): Promise<SpawnResult> => {
-      const agentId = `${slug(req.name)}-${randomUUID().slice(0, 8)}`;
-      const logPath = join(
-        app.getPath("userData"),
-        "sessions",
-        `${agentId}.ndjson`,
-      );
+  ipcMain.handle(IPC.spawnAgent, async (_evt, req: SpawnRequest): Promise<SpawnResult> => {
+    const agentId = `${slug(req.name)}-${randomUUID().slice(0, 8)}`;
+    const logPath = join(app.getPath("userData"), "sessions", `${agentId}.ndjson`);
 
-      const handle = spawnAgent({
-        agentId,
-        name: req.name,
-        agentClass: req.agentClass,
-        cwd: normalizeCwd(req.cwd),
-        prompt: req.prompt,
-        logPath,
-        onEvent: (event: PokeHubEvent) => {
-          sendToRenderer(IPC.agentEvent, event);
-          if (event.kind === "agent.exited") {
-            resolveAsksForAgent(event.agentId, "refuse");
+    const handle = spawnAgent({
+      agentId,
+      name: req.name,
+      agentClass: req.agentClass,
+      cwd: normalizeCwd(req.cwd),
+      prompt: req.prompt,
+      logPath,
+      onEvent: (event: PokeHubEvent) => {
+        sendToRenderer(IPC.agentEvent, event);
+        if (event.kind === "agent.exited") {
+          resolveAsksForAgent(event.agentId, "refuse");
+        }
+      },
+      requestPermission: (ask) =>
+        new Promise<PermissionDecision>((resolve) => {
+          if (!mainWindow || mainWindow.isDestroyed()) {
+            resolve("refuse");
+            return;
           }
-        },
-        requestPermission: (ask) =>
-          new Promise<PermissionDecision>((resolve) => {
-            if (!mainWindow || mainWindow.isDestroyed()) {
-              resolve("refuse");
-              return;
-            }
-            const id = randomUUID();
-            const ackTimer = setTimeout(() => {
-              // Renderer never confirmed receipt — undeliverable, fail closed.
-              discardAsk(id)?.resolve("refuse");
-            }, ACK_DEADLINE_MS);
-            pendingAsks.set(id, { agentId, resolve, ackTimer });
-            sendToRenderer(IPC.permissionAsk, { id, ask });
-          }),
-      });
+          const id = randomUUID();
+          const ackTimer = setTimeout(() => {
+            // Renderer never confirmed receipt — undeliverable, fail closed.
+            discardAsk(id)?.resolve("refuse");
+          }, ACK_DEADLINE_MS);
+          pendingAsks.set(id, { agentId, resolve, ackTimer });
+          sendToRenderer(IPC.permissionAsk, { id, ask });
+        }),
+    });
 
-      agents.set(agentId, handle);
-      void handle.done.finally(() => resolveAsksForAgent(agentId, "refuse"));
+    agents.set(agentId, handle);
+    void handle.done.finally(() => resolveAsksForAgent(agentId, "refuse"));
 
-      return { agentId, logPath };
-    },
-  );
+    return { agentId, logPath };
+  });
 
   ipcMain.on(IPC.permissionAck, (_evt, { id }: { id: string }) => {
     // Receipt confirmed — stop the undeliverable timer; now wait for the user
@@ -181,16 +174,13 @@ app.whenReady().then(() => {
     agents.get(req.agentId)?.stop();
   });
 
-  ipcMain.handle(
-    IPC.followUpAgent,
-    async (_evt, req: FollowUpRequest): Promise<FollowUpResult> => {
-      const handle = agents.get(req.agentId);
-      if (!handle) return { ok: false, reason: "unknown agent" };
-      const text = req.text.trim();
-      if (!text) return { ok: false, reason: "empty message" };
-      return handle.followUp(text);
-    },
-  );
+  ipcMain.handle(IPC.followUpAgent, async (_evt, req: FollowUpRequest): Promise<FollowUpResult> => {
+    const handle = agents.get(req.agentId);
+    if (!handle) return { ok: false, reason: "unknown agent" };
+    const text = req.text.trim();
+    if (!text) return { ok: false, reason: "empty message" };
+    return handle.followUp(text);
+  });
 
   ipcMain.handle(IPC.worldSnapshot, (): PokeHubEvent[] => {
     const all: PokeHubEvent[] = [];
@@ -217,7 +207,12 @@ app.on("window-all-closed", () => {
 });
 
 function slug(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "agent";
+  return (
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "") || "agent"
+  );
 }
 
 /** The composer's cwd field is free-typed and often copy-pasted: trim stray

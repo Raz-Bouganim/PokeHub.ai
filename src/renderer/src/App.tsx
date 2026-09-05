@@ -31,9 +31,7 @@ export function App() {
   useEffect(() => {
     if (!window.pokehub) return;
     // Queue asks — a second agent's encounter must not clobber the first.
-    return window.pokehub.onPermissionAsk((envelope) =>
-      setAskQueue((q) => [...q, envelope]),
-    );
+    return window.pokehub.onPermissionAsk((envelope) => setAskQueue((q) => [...q, envelope]));
   }, []);
 
   const selected = selectedId ? world.agents[selectedId] : undefined;
@@ -124,11 +122,9 @@ export function App() {
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder={
-            followMode ? `follow-up turn for ${targetName}…` : "task for the agent"
-          }
+          placeholder={followMode ? `follow-up turn for ${targetName}…` : "task for the agent"}
         />
-        <button onClick={send} disabled={busy}>
+        <button onClick={() => void send()} disabled={busy}>
           {sendLabel}
         </button>
         {selectedId && (
@@ -138,11 +134,11 @@ export function App() {
         )}
       </div>
 
-      {(notice || (selected && selected.status === "exited")) && (
+      {(notice !== null || selected?.status === "exited") && (
         <div className="bar" style={{ marginTop: -4 }}>
           <span style={{ color: "#ffcf5c" }}>
             {notice ??
-              `${selected!.name} has exited — sending will spawn a new agent`}
+              `${selected?.name ?? "the agent"} has exited — sending will spawn a new agent`}
           </span>
         </div>
       )}
@@ -150,11 +146,7 @@ export function App() {
       <div className="left">
         <div className="panel map-panel">
           <h2>Map</h2>
-          <WorldMap
-            world={world}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-          />
+          <WorldMap world={world} selectedId={selectedId} onSelect={setSelectedId} />
         </div>
 
         <div className="panel">
@@ -191,25 +183,16 @@ export function App() {
               )}
               {a.thought && <div>💭 {a.thought}</div>}
               {a.status === "idle" && <div>✓ idle — send a follow-up turn</div>}
-              {a.pendingPermissions[0] && (
-                <div>⏸ awaiting: {a.pendingPermissions[0].tool}</div>
-              )}
+              {a.pendingPermissions[0] && <div>⏸ awaiting: {a.pendingPermissions[0].tool}</div>}
               {a.exitReason && <div>ended: {a.exitReason}</div>}
             </div>
           ))}
-          {agentList(world).length === 0 && (
-            <p>No agents yet. Spawn one above.</p>
-          )}
+          {agentList(world).length === 0 && <p>No agents yet. Spawn one above.</p>}
         </div>
       </div>
 
       <div className="right">
-        {selected && (
-          <AgentFocus
-            agent={selected}
-            onClose={() => setSelectedId(null)}
-          />
-        )}
+        {selected && <AgentFocus agent={selected} onClose={() => setSelectedId(null)} />}
         <div className="panel raw-log">
           <div className="raw-log-head">
             <h2>Raw event log</h2>
@@ -224,10 +207,7 @@ export function App() {
               </label>
             )}
           </div>
-          {(logFilterOn && selectedId
-            ? log.filter((e) => e.agentId === selectedId)
-            : log
-          )
+          {(logFilterOn && selectedId ? log.filter((e) => e.agentId === selectedId) : log)
             .slice(-200)
             .map((e) => (
               // (agentId, seq) is unique per agent and stable — no array index,
@@ -254,8 +234,7 @@ export function App() {
           <div className="encounter">
             <h2>A wild {ask.ask.tool.toUpperCase()} appeared!</h2>
             <p>
-              {ask.ask.agentName} —{" "}
-              {ask.ask.title ?? `${ask.ask.tool} wants to run:`}
+              {ask.ask.agentName} — {ask.ask.title ?? `${ask.ask.tool} wants to run:`}
             </p>
             <pre>{JSON.stringify(ask.ask.input, null, 2)}</pre>
             <div className="actions">
@@ -266,9 +245,7 @@ export function App() {
               <button onClick={() => answer("refuse")}>Refuse</button>
             </div>
             {askQueue.length > 1 && (
-              <p style={{ opacity: 0.6 }}>
-                {askQueue.length - 1} more waiting
-              </p>
+              <p style={{ opacity: 0.6 }}>{askQueue.length - 1} more waiting</p>
             )}
           </div>
         </div>

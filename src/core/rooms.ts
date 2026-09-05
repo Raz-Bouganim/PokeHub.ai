@@ -26,13 +26,22 @@ const TOOL_ROOM: Readonly<Record<string, Room>> = {
  * Acceptable for Phase 0. Unmatched Bash commands return `undefined` (sprite
  * stays put).
  */
-const BASH_ROOM_RULES: ReadonlyArray<{ readonly match: RegExp; readonly room: Room }> = [
+const BASH_ROOM_RULES: readonly {
+  readonly match: RegExp;
+  readonly room: Room;
+}[] = [
   // `(\w+=\S+\s+)*` lets leading env assignments through, e.g. `GIT_PAGER=cat git log`.
   { match: /(^|[;&|]\s*)(\w+=\S+\s+)*git(\s|$)/, room: "center" },
-  { match: /\b(vitest|jest|pytest|mocha|ava|go test|cargo test|rspec|phpunit)\b/, room: "gym" },
+  {
+    match: /\b(vitest|jest|pytest|mocha|ava|go test|cargo test|rspec|phpunit)\b/,
+    room: "gym",
+  },
   { match: /\bnpm\s+(run\s+)?(test|build|lint)\b/, room: "gym" },
   { match: /\b(pnpm|yarn|bun)\s+(run\s+)?(test|build|lint)\b/, room: "gym" },
-  { match: /\b(tsc|eslint|prettier|ruff|clippy|make|webpack|rollup|turbo)\b/, room: "gym" },
+  {
+    match: /\b(tsc|eslint|prettier|ruff|clippy|make|webpack|rollup|turbo)\b/,
+    room: "gym",
+  },
   { match: /\b(build|lint|test)\b/, room: "gym" },
 ];
 
@@ -45,10 +54,7 @@ function roomForBash(input: Record<string, unknown>): Room | undefined {
 }
 
 /** The one entry point. Pure. */
-export function roomForTool(
-  tool: string,
-  input: Record<string, unknown>,
-): Room | undefined {
+export function roomForTool(tool: string, input: Record<string, unknown>): Room | undefined {
   if (tool === "Bash") return roomForBash(input);
   return TOOL_ROOM[tool];
 }

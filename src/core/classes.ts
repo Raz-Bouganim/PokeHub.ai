@@ -109,8 +109,7 @@ const CLASS_BASH_POLICY: Readonly<Record<string, BashPolicy>> = {
       ),
     ],
     deny: WRITE_SMELLS,
-    reason:
-      "Runner may only run tests, builds, linters and read-only inspection.",
+    reason: "Runner may only run tests, builds, linters and read-only inspection.",
   },
   Keeper: {
     allow: [

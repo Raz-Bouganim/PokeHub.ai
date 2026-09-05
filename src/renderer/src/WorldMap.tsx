@@ -211,17 +211,18 @@ function renderAgents(
       // of its (non-overlapping) cell; a single row uses the full room height.
       s.container.x = room.x + 12 + cellW * (col + 0.5);
       s.container.y = innerTop + cellH * (rowN + 0.5);
-      s.container.alpha =
-        a.status === "exited" ? 0.4 : a.status === "idle" ? 0.7 : 1;
+      s.container.alpha = a.status === "exited" ? 0.4 : a.status === "idle" ? 0.7 : 1;
 
       const tint = STATUS_TINT[a.status];
       s.body.clear();
       s.body.circle(0, 0, 9).fill(tint);
       // Stable per-agent accent ring — identity, independent of status colour,
       // so the same agent reads the same everywhere (raw log rows too).
-      s.body
-        .circle(0, 0, 11)
-        .stroke({ width: 1.5, color: `hsl(${agentHue(a.id)}, 65%, 65%)`, alpha: 0.9 });
+      s.body.circle(0, 0, 11).stroke({
+        width: 1.5,
+        color: `hsl(${agentHue(a.id)}, 65%, 65%)`,
+        alpha: 0.9,
+      });
       if (a.status === "blocked" || a.status === "erroring") {
         s.body.circle(0, 0, 13).stroke({ width: 2, color: tint });
       }
@@ -310,13 +311,7 @@ export function WorldMap({
         const layer = new Container();
         app.stage.addChild(layer);
         layerRef.current = layer;
-        renderAgents(
-          layer,
-          spritesRef.current,
-          worldRef.current,
-          selectedIdRef.current,
-          select,
-        );
+        renderAgents(layer, spritesRef.current, worldRef.current, selectedIdRef.current, select);
       })
       .catch((err: unknown) => {
         // A dead Pixi panel should say why, not sit blank.
@@ -330,23 +325,16 @@ export function WorldMap({
       spritesRef.current = new Map();
       if (initialised) app.destroy(true, { children: true });
     };
-    // world is intentionally not a dep — the render effect below handles updates.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // `world` is intentionally not a dep — the render effect below handles
+    // updates through `worldRef`. This effect creates the Pixi app exactly once.
   }, []);
 
   // Redraw sprites whenever the world — or the selection highlight — changes.
   useEffect(() => {
     if (layerRef.current) {
-      renderAgents(
-        layerRef.current,
-        spritesRef.current,
-        world,
-        selectedId,
-        select,
-      );
+      renderAgents(layerRef.current, spritesRef.current, world, selectedId, select);
     }
-    // `select` is a stable wrapper over a ref; not a dep.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // `select` is a stable wrapper over a ref, so it is not a dep.
   }, [world, selectedId]);
 
   return (

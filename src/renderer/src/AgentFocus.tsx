@@ -43,9 +43,7 @@ export function AgentFocus({
         {agent.sessionId && (
           <>
             <span>·</span>
-            <span title={agent.sessionId}>
-              session {agent.sessionId.slice(0, 8)}
-            </span>
+            <span title={agent.sessionId}>session {agent.sessionId.slice(0, 8)}</span>
           </>
         )}
       </div>
@@ -64,9 +62,7 @@ export function AgentFocus({
         <div className="focus-tools-head">
           <strong>recent tools</strong>
           {agent.pendingPermissions[0] && (
-            <span className="status-blocked">
-              ⏸ awaiting {agent.pendingPermissions[0].tool}
-            </span>
+            <span className="status-blocked">⏸ awaiting {agent.pendingPermissions[0].tool}</span>
           )}
         </div>
         {agent.recentTools.length === 0 ? (
@@ -94,10 +90,7 @@ export function AgentFocus({
         >
           conversation
         </button>
-        <button
-          className={tab === "journal" ? "active" : ""}
-          onClick={() => setTab("journal")}
-        >
+        <button className={tab === "journal" ? "active" : ""} onClick={() => setTab("journal")}>
           journal{agent.journal.length > 0 ? ` (${agent.journal.length})` : ""}
         </button>
       </div>

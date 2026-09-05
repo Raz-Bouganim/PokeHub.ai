@@ -42,14 +42,9 @@ function withTurn(
 }
 
 /** Append a finished-or-in-flight tool call to the capped recent-tools trail. */
-function withRecentTool(
-  recentTools: RecentTool[],
-  entry: RecentTool,
-): RecentTool[] {
+function withRecentTool(recentTools: RecentTool[], entry: RecentTool): RecentTool[] {
   const next = [...recentTools, entry];
-  return next.length > RECENT_TOOLS_LIMIT
-    ? next.slice(next.length - RECENT_TOOLS_LIMIT)
-    : next;
+  return next.length > RECENT_TOOLS_LIMIT ? next.slice(next.length - RECENT_TOOLS_LIMIT) : next;
 }
 
 /** Fold a new transcript entry into an agent's `transcript` + `transcriptDropped`. */
@@ -132,14 +127,12 @@ function applyToAgent(prev: AgentState, event: PokeHubEvent): AgentState {
       // guard above already blocks prompts to a finished agent. Don't downgrade
       // status while the session still shows work in flight (a prompt landing
       // out of order on replay) or before it exists ("spawning").
-      const midTurn =
-        base.activeTools.length > 0 || base.pendingPermissions.length > 0;
+      const midTurn = base.activeTools.length > 0 || base.pendingPermissions.length > 0;
       return {
         ...base,
         ...recordTurn(base, { seq: event.seq, role: "user", text: event.text }),
         promptCount: base.promptCount + 1,
-        status:
-          midTurn || prev.status === "spawning" ? prev.status : "thinking",
+        status: midTurn || prev.status === "spawning" ? prev.status : "thinking",
         thought: null,
         exitReason: null,
       };
@@ -150,8 +143,7 @@ function applyToAgent(prev: AgentState, event: PokeHubEvent): AgentState {
       // one-line thought bubble from it (translate no longer emits a separate
       // prose `agent.thinking`). Same status caution as `agent.thinking`: a
       // tool in flight or a pending ask outranks "the model is talking".
-      const talking =
-        base.activeTools.length === 0 && base.status !== "blocked";
+      const talking = base.activeTools.length === 0 && base.status !== "blocked";
       return {
         ...base,
         ...recordTurn(base, {
@@ -181,17 +173,11 @@ function applyToAgent(prev: AgentState, event: PokeHubEvent): AgentState {
 
     case "tool.started": {
       const room = roomForTool(event.tool, event.input);
-      const alreadyActive = base.activeTools.some(
-        (t) => t.toolCallId === event.toolCallId,
-      );
+      const alreadyActive = base.activeTools.some((t) => t.toolCallId === event.toolCallId);
       // A re-delivered start (snapshot + live overlap) for a call already in the
       // trail — even one that has since finished — must not add a second row.
-      const alreadyTrailed = base.recentTools.some(
-        (t) => t.toolCallId === event.toolCallId,
-      );
-      const alreadyJournaled = base.journal.some(
-        (j) => j.toolCallId === event.toolCallId,
-      );
+      const alreadyTrailed = base.recentTools.some((t) => t.toolCallId === event.toolCallId);
+      const alreadyJournaled = base.journal.some((j) => j.toolCallId === event.toolCallId);
       const target = toolTarget(event.tool, event.input);
       const journalEntry: JournalEntry = {
         toolCallId: event.toolCallId,
@@ -224,9 +210,7 @@ function applyToAgent(prev: AgentState, event: PokeHubEvent): AgentState {
     }
 
     case "tool.finished": {
-      const activeTools = base.activeTools.filter(
-        (t) => t.toolCallId !== event.toolCallId,
-      );
+      const activeTools = base.activeTools.filter((t) => t.toolCallId !== event.toolCallId);
       // A refused call comes back `ok: false` (the SDK feeds the model an error
       // result), but the user chose that — it is not an erroring agent. Settle
       // it like a success and forget the id.
@@ -241,9 +225,7 @@ function applyToAgent(prev: AgentState, event: PokeHubEvent): AgentState {
         // the SDK, and showing it as a failure (✕, red) in a trail the user
         // can't dismiss would contradict the agent's own status for the exact
         // same event.
-        recentTools: base.recentTools.some(
-          (t) => t.toolCallId === event.toolCallId,
-        )
+        recentTools: base.recentTools.some((t) => t.toolCallId === event.toolCallId)
           ? base.recentTools.map((t) =>
               t.toolCallId === event.toolCallId ? { ...t, ok: settledOk } : t,
             )
@@ -262,8 +244,7 @@ function applyToAgent(prev: AgentState, event: PokeHubEvent): AgentState {
           : base.refusedToolCallIds,
         // Still working while any other tool is in flight; only the last one
         // finishing settles the status.
-        status:
-          activeTools.length > 0 ? "working" : settledOk ? "thinking" : "erroring",
+        status: activeTools.length > 0 ? "working" : settledOk ? "thinking" : "erroring",
       };
     }
 
@@ -285,9 +266,7 @@ function applyToAgent(prev: AgentState, event: PokeHubEvent): AgentState {
       return base;
 
     case "permission.requested": {
-      const alreadyPending = base.pendingPermissions.some(
-        (p) => p.toolCallId === event.toolCallId,
-      );
+      const alreadyPending = base.pendingPermissions.some((p) => p.toolCallId === event.toolCallId);
       return {
         ...base,
         status: "blocked",
@@ -308,23 +287,17 @@ function applyToAgent(prev: AgentState, event: PokeHubEvent): AgentState {
       const pendingPermissions = base.pendingPermissions.filter(
         (p) => p.toolCallId !== event.toolCallId,
       );
-      const unblocked =
-        base.status === "blocked" && pendingPermissions.length === 0;
+      const unblocked = base.status === "blocked" && pendingPermissions.length === 0;
       return {
         ...base,
         pendingPermissions,
         // Remember a refusal so the error tool_result the SDK sends next does
         // not read as an erroring agent (see `tool.finished`).
         refusedToolCallIds:
-          event.decision === "refuse" &&
-          !base.refusedToolCallIds.includes(event.toolCallId)
+          event.decision === "refuse" && !base.refusedToolCallIds.includes(event.toolCallId)
             ? [...base.refusedToolCallIds, event.toolCallId]
             : base.refusedToolCallIds,
-        status: unblocked
-          ? base.activeTools.length > 0
-            ? "working"
-            : "thinking"
-          : base.status,
+        status: unblocked ? (base.activeTools.length > 0 ? "working" : "thinking") : base.status,
       };
     }
 
@@ -349,10 +322,7 @@ function applyToAgent(prev: AgentState, event: PokeHubEvent): AgentState {
 }
 
 /** Fold a whole log into a world. Convenience for replay and tests. */
-export function replay(
-  events: Iterable<PokeHubEvent>,
-  from: WorldState,
-): WorldState {
+export function replay(events: Iterable<PokeHubEvent>, from: WorldState): WorldState {
   let state = from;
   for (const event of events) state = reduce(state, event);
   return state;

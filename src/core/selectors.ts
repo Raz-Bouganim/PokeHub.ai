@@ -30,7 +30,5 @@ export function isStalled(agent: AgentState, now: number): boolean {
 /** Agents that need the user right now: blocked or erroring. The most valuable
  *  glance-level fact (VISION). */
 export function needsAttention(world: WorldState): AgentState[] {
-  return agentList(world).filter(
-    (a) => a.status === "blocked" || a.status === "erroring",
-  );
+  return agentList(world).filter((a) => a.status === "blocked" || a.status === "erroring");
 }

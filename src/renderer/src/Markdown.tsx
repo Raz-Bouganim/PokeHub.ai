@@ -130,10 +130,7 @@ function parseBlocks(src: string): ReactNode[] {
     if (/^([-*+]|\d+\.)\s+/.test(t)) {
       const ordered = /^\d+\.\s/.test(t);
       const items: string[] = [];
-      while (
-        i < lines.length &&
-        /^([-*+]|\d+\.)\s+/.test((lines[i] ?? "").trim())
-      ) {
+      while (i < lines.length && /^([-*+]|\d+\.)\s+/.test((lines[i] ?? "").trim())) {
         items.push((lines[i] ?? "").trim().replace(/^([-*+]|\d+\.)\s+/, ""));
         i++;
       }
@@ -178,8 +175,7 @@ function parseBlocks(src: string): ReactNode[] {
  *  so markers inside a code span are left alone. */
 function inline(text: string, keyPrefix: string): ReactNode[] {
   const nodes: ReactNode[] = [];
-  const re =
-    /(`[^`]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*]+\*)|(\[[^\]]+\]\([^)]+\))/g;
+  const re = /(`[^`]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*]+\*)|(\[[^\]]+\]\([^)]+\))/g;
   let last = 0;
   let n = 0;
   let m: RegExpExecArray | null;

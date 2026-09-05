@@ -5,8 +5,16 @@ The spec is `VISION.md`. The always-on rules are `CLAUDE.md`.
 
 ## Next up
 
-**Phase 2 — Parallel.** Phase 1 done (verified 2026-09-05). Slice 1 (multi-agent map
-legibility) done 2026-09-05 (see Done). Remaining slices, in order:
+**Phase 1.5 — Coding standards + refactor (in progress, started 2026-09-05).** `docs/STANDARDS.md`
+is written and approved (4 rounds of decisions). The codebase is being brought to it on branch
+`phase-1.5-coding-standards`, one reviewable commit per slice, `npm run check` green between each.
+Plan: `~/.claude/plans/eventual-sparking-feigenbaum.md`. Slices: 0 tooling (prettier + eslint) ·
+1 `__tests__/` + kebab-case · 2 core readonly/return-types/JSDoc · 3 split `text.ts` · 4
+`agent-class/` strategy modules · 5 `AgentSupervisor` · 6 CSS Modules · 7 renderer hooks/component
+split · 8 sweep + QA. **Phase 2 resumes in a fresh session once this merges.**
+
+**Phase 2 — Parallel (paused for Phase 1.5).** Phase 1 done (verified 2026-09-05). Slice 1
+(multi-agent map legibility) done 2026-09-05 (see Done). Remaining slices, in order:
 
 **Start here — Slice 2: subagent tethering.** Make nesting visible instead of inferred from
 transcript indentation. A one-off subagent should render tethered to (and following) its parent

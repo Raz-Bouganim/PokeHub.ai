@@ -91,12 +91,9 @@ export function stripInlineMarkdown(s: string): string {
  * there is nothing worth showing. Used by the focus view's recent-activity
  * strip and, later, the journal.
  */
-export function toolTarget(
-  tool: string,
-  input: Record<string, unknown>,
-): string | null {
+export function toolTarget(tool: string, input: Record<string, unknown>): string | null {
   const str = (k: string): string | undefined =>
-    typeof input[k] === "string" ? (input[k] as string) : undefined;
+    typeof input[k] === "string" ? input[k] : undefined;
 
   switch (tool) {
     case "Read":
@@ -165,13 +162,11 @@ export function summarizeToolOutput(output: unknown): string | undefined {
   }
 
   if (Array.isArray(o.structuredPatch)) {
-    const git = o.gitDiff as
-      | { additions?: unknown; deletions?: unknown }
-      | undefined;
+    const git = o.gitDiff as { additions?: unknown; deletions?: unknown } | undefined;
     const { additions, deletions } =
       git && typeof git.additions === "number" && typeof git.deletions === "number"
         ? { additions: git.additions, deletions: git.deletions }
-        : countPatchLines(o.structuredPatch as Array<{ lines?: unknown }>);
+        : countPatchLines(o.structuredPatch as { lines?: unknown }[]);
     return `+${additions} / -${deletions}`;
   }
 
@@ -201,9 +196,10 @@ export function summarizeToolOutput(output: unknown): string | undefined {
 
 /** Count `+`/`-` lines across a unified-diff's hunks. Used only when the SDK
  *  output didn't already include exact `gitDiff` counts. */
-function countPatchLines(
-  hunks: Array<{ lines?: unknown }>,
-): { additions: number; deletions: number } {
+function countPatchLines(hunks: { lines?: unknown }[]): {
+  additions: number;
+  deletions: number;
+} {
   let additions = 0;
   let deletions = 0;
   for (const hunk of hunks) {
