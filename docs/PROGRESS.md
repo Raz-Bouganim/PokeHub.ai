@@ -8,23 +8,15 @@ The spec is `VISION.md`. The always-on rules are `CLAUDE.md`.
 **Phase 1 — Legibility.** Goal for the phase: full room set for one project, encounter-style
 permission dialog, journal with diffs, raw-stream toggle — and it must genuinely beat a
 terminal for a *single* agent. Follow-up interaction + full-text capture + agent-focus view +
-per-agent raw-log filter/colour + journal with diffs all landed and were verified live.
+per-agent raw-log filter/colour + journal with diffs + cwd normalization all landed.
 
-**Start here — cwd field robustness.** Confirmed twice during this session's manual
-verification pass: the composer's folder input (`App.tsx`'s `cwd` state) is passed straight
-through — `App.tsx` → `main/index.ts`'s IPC handler → `session.ts` → `query({ options: { cwd
-} })` — with **zero normalization**. A leading `~/` (Node doesn't expand it) or a stray
-leading/trailing space (easy to introduce via copy-paste) resolves to a nonexistent directory;
-the child `claude` process then fails to spawn there, and the SDK surfaces a generic,
-misleading `"Claude Code native binary ... exists but failed to launch ... doesn't match this
-system's libc"` error that has nothing to do with the real cause (see Gotchas). Fix: `.trim()`
-the field and expand a leading `~`/`~/` to `os.homedir()` before it reaches `query()` — cheapest
-done in `main/index.ts`'s spawn handler (keeps `session.ts` and the renderer untouched). Small,
-well-scoped, deferred only because the user chose to postpone it mid-verification, not because
-it's unclear how to fix.
+**Start here — full room-set polish, encounter-dialog polish.** The next Phase 1 item queued
+below "Start here" from the last few sessions. claude-in-chrome is now connected (reconnected
+mid-session on 2026-09-05, see Gotchas) so this is the first UI task in a while that can be
+**visually verified live** via `npm run dev` at `localhost:5173`, not just tsc + vitest —
+actually drive it through Chrome rather than asking the user to eyeball it.
 
 Then, in rough priority order (all Phase 1):
-- Full room-set polish, encounter-dialog polish.
 - Swap the hand-rolled `Markdown.tsx` for `react-markdown` **only if** the transcript becomes
   central and the mini-renderer's gaps (nested lists, task lists) start to bite. Not now.
 - UI refactor / real art is **Phase 3**, not now — acknowledged and deferred on purpose.
@@ -57,6 +49,11 @@ Reference notes:
 
 ## Done
 
+- **2026-09-05** — **cwd field normalization** (Phase 1, prior session's "start here"). New
+  `normalizeCwd()` in `main/index.ts`: `.trim()`s the composer's folder input and expands a
+  leading `~`/`~/` to `os.homedir()` before it reaches `spawnAgent`/`query()`. tsc clean, 120
+  tests still pass (no new tests — `src/main` has no test coverage at all, since importing it
+  drags in `electron`; consistent with existing practice, not a gap introduced here).
 - **2026-09-05** — **Journal with diffs** (Phase 1, the prior session's "start here"). New
   `JournalEntry` (`AgentState.journal`, uncapped) extends `Pick<RecentTool, "toolCallId" |
   "tool" | "target" | "ok">` and adds `kind` (read/write/other), `summary`, and `turn`
@@ -143,6 +140,10 @@ Reference notes:
 
 ## Decisions
 
+- **2026-09-05** — `normalizeCwd()` only handles the two forms actually seen live (`~` alone,
+  `~/rest`), not arbitrary `~user/...` — Node's own `os.homedir()` only resolves the *current*
+  user's home, and no live failure has involved another user's tilde form. Cheapest fix for the
+  confirmed bug, not a general path-expansion library.
 - **2026-09-05** — An abandoned journal entry (owning agent exited before its `tool.finished`
   arrived) is surfaced **at render time** (`AgentFocus.tsx` checks `agent.status === "exited"`),
   not by mutating the stored `ok`. Keeps `JournalEntry.ok: boolean | null`'s meaning intact
@@ -252,11 +253,13 @@ Reference notes:
 
 _Things learned the hard way. One line each — what broke, and what fixed it._
 
-- **No visual browser verification available in this sandbox (2026-09-05).** The
-  claude-in-chrome extension reports "not connected" and macOS `screencapture` errors "could
-  not create image from display" (no screen-recording permission for the terminal) — so
-  `npm run dev` + tsc + vitest is as far as automated verification goes here; UI changes need
-  the user to eyeball the running app themselves before calling a UI task done.
+- **claude-in-chrome was disconnected for most of this session, then reconnected mid-session
+  (2026-09-05)** via `/mcp` — the earlier "not connected" state (and macOS `screencapture`
+  lacking screen-recording permission) meant `npm run dev` + tsc + vitest was as far as
+  automated verification went for the cwd-normalization fix (a non-UI change, so this didn't
+  block it). Now connected: the next UI task (room-set/encounter polish) should actually be
+  driven through Chrome rather than asking the user to eyeball it — check connection state
+  first, since it can drop between sessions.
 - **Background agents `git add` the whole tree.** Seen three times now (a scaffold-review fork,
   a verification subagent, then a `/code-review` fork) — despite explicit "don't stage"
   instructions. Not a commit. `git reset` (no `--hard`) unstages cleanly. Assume any subagent
@@ -267,7 +270,8 @@ _Things learned the hard way. One line each — what broke, and what fixed it._
   generic `"Claude Code native binary ... exists but failed to launch ... doesn't match this
   system's libc"` message — which is actually just "the cwd doesn't exist," dressed up as a
   platform/libc problem. If that error ever shows up again, check the literal `cwd` string
-  (including whitespace) before suspecting the binary. Fix queued in "Next up," not yet applied.
+  (including whitespace) before suspecting the binary. **Fixed 2026-09-05** —
+  `normalizeCwd()` in `main/index.ts`.
 - **Grep's default `"content"` output mode leaves `numFiles` at 0 even with real matches** —
   confirmed against a live SDK run (a query that found 6 real matches came back with
   `numFiles: 0, filenames: []`). Its match count instead lives in the top-level `numLines`

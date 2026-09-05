@@ -10,6 +10,7 @@
 
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { BrowserWindow, app, ipcMain } from "electron";
 import type { PokeHubEvent } from "../core/events.ts";
@@ -133,7 +134,7 @@ app.whenReady().then(() => {
         agentId,
         name: req.name,
         agentClass: req.agentClass,
-        cwd: req.cwd,
+        cwd: normalizeCwd(req.cwd),
         prompt: req.prompt,
         logPath,
         onEvent: (event: PokeHubEvent) => {
@@ -217,4 +218,15 @@ app.on("window-all-closed", () => {
 
 function slug(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "agent";
+}
+
+/** The composer's cwd field is free-typed and often copy-pasted: trim stray
+ *  whitespace and expand a leading `~`/`~/` (Node does not do this itself).
+ *  Without it, either mistake resolves to a nonexistent directory and the SDK
+ *  surfaces a misleading native-binary/libc error instead of the real cause. */
+function normalizeCwd(cwd: string): string {
+  const trimmed = cwd.trim();
+  if (trimmed === "~") return homedir();
+  if (trimmed.startsWith("~/")) return join(homedir(), trimmed.slice(2));
+  return trimmed;
 }
