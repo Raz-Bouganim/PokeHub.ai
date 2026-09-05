@@ -38,6 +38,23 @@ export interface RecentTool {
  *  still in the log; this is just the focus-view strip. */
 export const RECENT_TOOLS_LIMIT = 8;
 
+/** One tool call in the journal — the unbounded, grouped-by-turn record of
+ *  everything an agent has touched (VISION "Legibility features"). Shares
+ *  `toolCallId`/`tool`/`target`/`ok` with `RecentTool` (both are populated
+ *  from the same `tool.started`/`tool.finished` events) so the two can't
+ *  quietly drift apart on type; the journal adds which turn it happened in,
+ *  a read/write/other classification (files read vs. modified must be
+ *  visually distinct, not just labelled), and the `+N / -M`-style summary
+ *  from `tool.finished`. Unlike `recentTools` this is never capped — it's
+ *  the record you scroll back through, not a glance-level strip. */
+export interface JournalEntry extends Pick<RecentTool, "toolCallId" | "tool" | "target" | "ok"> {
+  kind: "read" | "write" | "other";
+  /** `tool.finished`'s human summary (e.g. "+42 / -7", "3 matches"), if any. */
+  summary: string | null;
+  /** `promptCount` at the time this call started — which user turn it belongs to. */
+  turn: number;
+}
+
 export interface PendingPermission {
   toolCallId: string;
   tool: string;
@@ -75,6 +92,8 @@ export interface AgentState {
   /** Recent tool calls, oldest first, capped at `RECENT_TOOLS_LIMIT` — survives
    *  a tool finishing so the focus view shows a stable activity trail. */
   recentTools: RecentTool[];
+  /** Every tool call this agent has made, oldest first, uncapped. The journal. */
+  journal: JournalEntry[];
   /** canUseTool asks awaiting the user, oldest first. */
   pendingPermissions: PendingPermission[];
   /** toolCallIds the user (or a class rule) refused. The SDK still feeds the

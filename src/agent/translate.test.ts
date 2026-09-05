@@ -113,6 +113,54 @@ describe("translate — SDK message -> event drafts", () => {
     expect(draft).toMatchObject({ kind: "tool.finished", toolCallId: "tool-1", ok: true });
   });
 
+  it("summarizes tool.finished from the structured tool_use_result (an edit diff)", () => {
+    const msg = {
+      type: "user",
+      session_id: "s",
+      message: { content: [{ type: "tool_result", tool_use_id: "e1", is_error: false }] },
+      tool_use_result: {
+        filePath: "/repo/auth.ts",
+        structuredPatch: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 2, lines: ["-a", "+b", "+c"] }],
+      },
+    };
+    expect(translate(msg, "a1", "s")[0]).toMatchObject({
+      kind: "tool.finished",
+      toolCallId: "e1",
+      summary: "+2 / -1",
+    });
+  });
+
+  it("omits summary for every block when a message batches more than one tool_result", () => {
+    // `tool_use_result` describes exactly one tool's output — it can't be
+    // safely attributed to any one block once a message carries more than
+    // one `tool_result` (e.g. parallel tool calls answered together), so
+    // none of them should get a summary rather than risk misattributing it.
+    const msg = {
+      type: "user",
+      session_id: "s",
+      message: {
+        content: [
+          { type: "tool_result", tool_use_id: "p1", is_error: false },
+          { type: "tool_result", tool_use_id: "p2", is_error: false },
+        ],
+      },
+      tool_use_result: { structuredPatch: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: ["+x"] }] },
+    };
+    const drafts = translate(msg, "a1", "s");
+    expect(drafts).toHaveLength(2);
+    for (const d of drafts) expect(d).not.toHaveProperty("summary");
+  });
+
+  it("omits summary when tool_use_result doesn't match a known shape", () => {
+    const msg = {
+      type: "user",
+      session_id: "s",
+      message: { content: [{ type: "tool_result", tool_use_id: "b1", is_error: false }] },
+      tool_use_result: { stdout: "ok", stderr: "", interrupted: false },
+    };
+    expect(translate(msg, "a1", "s")[0]).not.toHaveProperty("summary");
+  });
+
   it("marks tool.finished not-ok on an error result", () => {
     const errResult = {
       type: "user",

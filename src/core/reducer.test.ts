@@ -192,6 +192,15 @@ describe("reducer — a refusal is not an erroring agent", () => {
     ];
     expect(replay(withRealError, initialWorld()).agents["R"]!.status).toBe("erroring");
   });
+
+  it("records a refused call as ok, not failed, in the recent-tools trail and journal", () => {
+    // The agent's own status treats a refusal as `settledOk` (see above) — the
+    // trail and journal must agree, or a benign refusal reads as a permanent
+    // ✕ / red failure the user can never dismiss (the journal is uncapped).
+    const agent = replay(stream, initialWorld()).agents["R"]!;
+    expect(agent.recentTools.find((t) => t.toolCallId === "x1")).toMatchObject({ ok: true });
+    expect(agent.journal.find((j) => j.toolCallId === "x1")).toMatchObject({ ok: true });
+  });
 });
 
 describe("reducer — a finished agent stays finished", () => {
@@ -477,6 +486,63 @@ describe("reducer — recent-tools trail (focus view)", () => {
     ).agents["N"]!.recentTools;
     expect(trail.some((t) => t.toolCallId === "ghost")).toBe(false);
     expect(trail.length).toBeLessThanOrEqual(8);
+  });
+});
+
+describe("reducer — journal (unbounded, grouped-by-turn tool history)", () => {
+  const stream: PokeHubEvent[] = [
+    ev({ seq: 1, agentId: "J", kind: "agent.spawned", name: "Jo", agentClass: "Builder", cwd: "/j" }),
+    ev({ seq: 2, agentId: "J", kind: "agent.prompt", text: "find and fix the bug" }),
+    ev({ seq: 3, agentId: "J", kind: "tool.started", toolCallId: "j1", tool: "Read", input: { file_path: "/j/src/auth.ts" } }),
+    ev({ seq: 4, agentId: "J", kind: "tool.finished", toolCallId: "j1", ok: true, summary: "42 lines" }),
+    ev({ seq: 5, agentId: "J", kind: "tool.started", toolCallId: "j2", tool: "Edit", input: { file_path: "/j/src/auth.ts" } }),
+    ev({ seq: 6, agentId: "J", kind: "tool.finished", toolCallId: "j2", ok: true, summary: "+4 / -1" }),
+    ev({ seq: 7, agentId: "J", kind: "agent.turn_finished" }),
+    ev({ seq: 8, agentId: "J", kind: "agent.prompt", text: "now run the tests" }),
+    ev({ seq: 9, agentId: "J", kind: "tool.started", toolCallId: "j3", tool: "Bash", input: { command: "npm test" } }),
+    ev({ seq: 10, agentId: "J", kind: "tool.finished", toolCallId: "j3", ok: false }),
+  ];
+
+  it("records every call with its kind, target, outcome and summary", () => {
+    const journal = replay(stream, initialWorld()).agents["J"]!.journal;
+    expect(journal).toEqual([
+      { toolCallId: "j1", tool: "Read", kind: "read", target: "auth.ts", ok: true, summary: "42 lines", turn: 1 },
+      { toolCallId: "j2", tool: "Edit", kind: "write", target: "auth.ts", ok: true, summary: "+4 / -1", turn: 1 },
+      { toolCallId: "j3", tool: "Bash", kind: "other", target: "npm test", ok: false, summary: null, turn: 2 },
+    ]);
+  });
+
+  it("is never capped — well past RECENT_TOOLS_LIMIT, every call is still there", () => {
+    const many: PokeHubEvent[] = [
+      ev({ seq: 1, agentId: "K", kind: "agent.spawned", name: "K", agentClass: "Builder", cwd: "/k" }),
+      ev({ seq: 2, agentId: "K", kind: "agent.prompt", text: "go" }),
+    ];
+    for (let i = 0; i < 20; i++) {
+      many.push(ev({ seq: i + 3, agentId: "K", kind: "tool.started", toolCallId: `t${i}`, tool: "Read", input: {} }));
+    }
+    const journal = replay(many, initialWorld()).agents["K"]!.journal;
+    expect(journal).toHaveLength(20);
+    expect(journal[0]!.toolCallId).toBe("t0");
+    expect(journal.at(-1)!.toolCallId).toBe("t19");
+  });
+
+  it("a re-delivered tool.started does not add a second entry", () => {
+    const journal = replay(
+      [...stream.slice(0, 4), ev({ seq: 11, agentId: "J", kind: "tool.started", toolCallId: "j1", tool: "Read", input: {} })],
+      initialWorld(),
+    ).agents["J"]!.journal;
+    expect(journal.filter((j) => j.toolCallId === "j1")).toHaveLength(1);
+  });
+
+  it("a tool.finished with no matching start is a harmless no-op", () => {
+    const journal = replay(
+      [
+        ev({ seq: 1, agentId: "L", kind: "agent.spawned", name: "L", agentClass: "Builder", cwd: "/l" }),
+        ev({ seq: 2, agentId: "L", kind: "tool.finished", toolCallId: "ghost", ok: true }),
+      ],
+      initialWorld(),
+    ).agents["L"]!.journal;
+    expect(journal).toEqual([]);
   });
 });
 

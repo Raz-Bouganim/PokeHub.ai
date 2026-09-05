@@ -14,11 +14,12 @@
 
 import type { PokeHubEvent } from "./events.ts";
 import { roomForTool } from "./rooms.ts";
-import { bubbleLine, toolTarget } from "./text.ts";
+import { bubbleLine, toolKind, toolTarget } from "./text.ts";
 import {
   RECENT_TOOLS_LIMIT,
   TRANSCRIPT_LIMIT,
   type AgentState,
+  type JournalEntry,
   type RecentTool,
   type TranscriptEntry,
   type WorldState,
@@ -69,6 +70,7 @@ function blankAgent(id: string): AgentState {
     thought: null,
     activeTools: [],
     recentTools: [],
+    journal: [],
     pendingPermissions: [],
     refusedToolCallIds: [],
     exitCode: null,
@@ -187,6 +189,19 @@ function applyToAgent(prev: AgentState, event: PokeHubEvent): AgentState {
       const alreadyTrailed = base.recentTools.some(
         (t) => t.toolCallId === event.toolCallId,
       );
+      const alreadyJournaled = base.journal.some(
+        (j) => j.toolCallId === event.toolCallId,
+      );
+      const target = toolTarget(event.tool, event.input);
+      const journalEntry: JournalEntry = {
+        toolCallId: event.toolCallId,
+        tool: event.tool,
+        kind: toolKind(event.tool),
+        target,
+        ok: null,
+        summary: null,
+        turn: base.promptCount,
+      };
       return {
         ...base,
         status: "working",
@@ -198,9 +213,10 @@ function applyToAgent(prev: AgentState, event: PokeHubEvent): AgentState {
           : withRecentTool(base.recentTools, {
               toolCallId: event.toolCallId,
               tool: event.tool,
-              target: toolTarget(event.tool, event.input),
+              target,
               ok: null,
             }),
+        journal: alreadyJournaled ? base.journal : [...base.journal, journalEntry],
         // Location follows the most recently started tool.
         location: room ?? base.location,
         thought: null,
@@ -220,14 +236,27 @@ function applyToAgent(prev: AgentState, event: PokeHubEvent): AgentState {
         ...base,
         activeTools,
         // Record the outcome on the matching recent-tools entry (it may already
-        // have been evicted by the cap — then this is a no-op).
+        // have been evicted by the cap — then this is a no-op). Use `settledOk`,
+        // not the raw `event.ok` — a refused call comes back `ok: false` from
+        // the SDK, and showing it as a failure (✕, red) in a trail the user
+        // can't dismiss would contradict the agent's own status for the exact
+        // same event.
         recentTools: base.recentTools.some(
           (t) => t.toolCallId === event.toolCallId,
         )
           ? base.recentTools.map((t) =>
-              t.toolCallId === event.toolCallId ? { ...t, ok: event.ok } : t,
+              t.toolCallId === event.toolCallId ? { ...t, ok: settledOk } : t,
             )
           : base.recentTools,
+        // Never evicted (uncapped), but tolerate a result with no matching
+        // start (e.g. replay beginning mid-log) as a no-op rather than crash.
+        journal: base.journal.some((j) => j.toolCallId === event.toolCallId)
+          ? base.journal.map((j) =>
+              j.toolCallId === event.toolCallId
+                ? { ...j, ok: settledOk, summary: event.summary ?? j.summary }
+                : j,
+            )
+          : base.journal,
         refusedToolCallIds: wasRefused
           ? base.refusedToolCallIds.filter((id) => id !== event.toolCallId)
           : base.refusedToolCallIds,

@@ -10,7 +10,7 @@
  */
 
 import type { PokeHubEvent } from "../core/events.ts";
-import { bubbleLine } from "../core/text.ts";
+import { bubbleLine, summarizeToolOutput } from "../core/text.ts";
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
   ? Omit<T, K>
@@ -38,6 +38,11 @@ interface SdkMessageLike {
   message?: { content?: ContentBlock[] | string };
   is_error?: boolean;
   compact_metadata?: { trigger?: string };
+  /** The tool's full structured Output object (per-tool shape), sibling to the
+   *  `tool_result` content block it answers — see `summarizeToolOutput`. Only
+   *  meaningful when `message.content` holds exactly one `tool_result` block;
+   *  the SDK does not batch several into one user message today. */
+  tool_use_result?: unknown;
 }
 
 function contentBlocks(msg: SdkMessageLike): ContentBlock[] {
@@ -125,6 +130,15 @@ export function translate(
     }
 
     case "user": {
+      const resultBlocks = contentBlocks(msg).filter((b) => b.type === "tool_result");
+      // `tool_use_result` describes exactly ONE tool's output, keyed by
+      // position/name, not by `tool_use_id` — it can't be safely attributed to
+      // a block if the message ever carries more than one `tool_result` (e.g.
+      // parallel tool calls answered together). Attach it only in the common
+      // one-block-per-message case; a batched message loses the summary
+      // rather than risk stamping the wrong one's diff onto another's call.
+      const summary =
+        resultBlocks.length === 1 ? summarizeToolOutput(msg.tool_use_result) : undefined;
       for (const block of contentBlocks(msg)) {
         if (block.type === "tool_result" && block.tool_use_id) {
           drafts.push({
@@ -134,6 +148,7 @@ export function translate(
             sessionId: sid,
             toolCallId: block.tool_use_id,
             ok: block.is_error !== true,
+            ...(summary !== undefined ? { summary } : {}),
           });
         }
       }

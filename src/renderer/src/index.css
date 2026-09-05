@@ -200,6 +200,13 @@ button:hover {
   color: #9aa0d8;
 }
 
+/* A journal call whose owning agent exited before its tool.finished arrived —
+   distinct from tool-active's "still running" so a dead agent can't read as
+   live. */
+.tool-unresolved .tool-dot {
+  color: #6a6d95;
+}
+
 .tool-name {
   color: #c8cbe8;
 }
@@ -209,12 +216,85 @@ button:hover {
   word-break: break-all;
 }
 
-.transcript {
+.focus-tabs {
+  display: flex;
+  gap: 4px;
+  border-top: 1px solid #2a2b45;
+  padding-top: 8px;
+}
+
+.focus-tabs button {
+  padding: 3px 10px;
+  font-size: 11px;
+  background: transparent;
+  border-color: #2a2b45;
+  color: #8a8db5;
+}
+
+.focus-tabs button.active {
+  background: #2d2f5c;
+  border-color: #4a4d8f;
+  color: inherit;
+}
+
+.transcript,
+.journal {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  border-top: 1px solid #2a2b45;
   padding-top: 8px;
+}
+
+.journal-turn {
+  margin-bottom: 10px;
+}
+
+.journal-turn-head {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8a8db5;
+  margin-bottom: 4px;
+}
+
+.journal-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.journal-entry {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  border-left: 2px solid transparent;
+  padding-left: 6px;
+}
+
+/* Read vs. write is a distinct signal from ok/fail (the dot colour) — VISION
+   "files read vs. modified must be visually distinct, not just labelled". */
+.journal-read {
+  border-left-color: #6f9fd8;
+}
+
+.journal-write {
+  border-left-color: #d8a05c;
+}
+
+.journal-other {
+  border-left-color: #4a4d8f;
+}
+
+.journal-summary {
+  color: #7fd7a5;
+  font-variant-numeric: tabular-nums;
+}
+
+.tool-bad .journal-summary {
+  color: #ff7a7a;
 }
 
 .turn {
