@@ -10,14 +10,26 @@ import type { AgentState, WorldState } from "./world.ts";
  *  streaming progress event. We copy the number rather than invent one. */
 export const STALL_TIMEOUT_MS = 10 * 60 * 1000;
 
+/**
+ * Every agent in the world, in insertion order.
+ *
+ * @param world - the world state
+ * @returns the agents as an array (a fresh array; the agents themselves are the
+ *          same readonly objects held in `world`)
+ */
 export function agentList(world: WorldState): AgentState[] {
   return Object.values(world.agents);
 }
 
 /**
- * An agent is "stalled" when it is mid-work but no event has advanced it inside
+ * Whether an agent is "stalled": mid-work but no event has advanced it inside
  * the stall window. Distinct from a long think (which still emits progress) —
  * but in Phase 0 every event is progress, so this is a coarse first cut.
+ *
+ * @param agent - the agent to check
+ * @param now   - the current time, epoch ms (passed in so the reducer/replay
+ *                stay deterministic — never read the clock here)
+ * @returns true if the agent looks stalled at time `now`
  */
 export function isStalled(agent: AgentState, now: number): boolean {
   if (agent.status !== "working" && agent.status !== "thinking") return false;
@@ -27,10 +39,13 @@ export function isStalled(agent: AgentState, now: number): boolean {
   return now - last > STALL_TIMEOUT_MS;
 }
 
-/** Agents that need the user right now: blocked or erroring. The most valuable
- *  glance-level fact (VISION). */
+/**
+ * Agents that need the user right now: blocked or erroring. The most valuable
+ * glance-level fact (VISION).
+ *
+ * @param world - the world state
+ * @returns the subset of agents awaiting attention (a fresh array)
+ */
 export function needsAttention(world: WorldState): AgentState[] {
-  return agentList(world).filter(
-    (a) => a.status === "blocked" || a.status === "erroring",
-  );
+  return agentList(world).filter((a) => a.status === "blocked" || a.status === "erroring");
 }

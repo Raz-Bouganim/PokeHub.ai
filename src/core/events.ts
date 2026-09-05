@@ -6,6 +6,9 @@
  * into world state, and it does so purely — so everything the map needs to be
  * rebuilt later must be captured here, in the event, at write time.
  *
+ * Every field is `readonly`: an event is an immutable historical fact. The
+ * reducer reads events and never mutates them.
+ *
  * Rules baked into this file:
  *  - `source` is present on every event from day one (attach-mode + repo/CI
  *    events later reuse the same pipeline).
@@ -29,34 +32,39 @@ export type EventSource = "agent" | "repo" | "system" | "user";
 export type Room = "library" | "forge" | "gym" | "center";
 export type Location = Room | "route";
 
+/** Raw tool input, as emitted by the SDK. Kept whole and opaque so
+ *  classification can improve later without a schema change. */
+export type ToolInput = Readonly<Record<string, unknown>>;
+
 interface EventBase {
-  v: typeof SCHEMA_VERSION;
+  readonly v: typeof SCHEMA_VERSION;
   /** Monotonic per-log sequence, assigned by the writer. De-dup keys off this
    *  per agent (see the file header). */
-  seq: number;
+  readonly seq: number;
   /** ISO-8601, stamped by the writer. Never used as `now` by the reducer. */
-  ts: string;
-  source: EventSource;
+  readonly ts: string;
+  readonly source: EventSource;
   /** PokeHub's stable id for the sprite. Survives session restarts. */
-  agentId: string;
+  readonly agentId: string;
   /** Claude Code's own session id, once known. */
-  sessionId: string | null;
+  readonly sessionId: string | null;
 }
 
 /** A roster agent (or one-off) has been created as a process we supervise. */
 export interface AgentSpawnedEvent extends EventBase {
-  kind: "agent.spawned";
-  name: string;
+  readonly kind: "agent.spawned";
+  readonly name: string;
   /** Class from the agent definition. A hard tool restriction, enforced before
-   *  the model sees the option (see `classes.ts` + `session.ts`), not a costume. */
-  agentClass: string;
-  cwd: string;
+   *  the model sees the option (see `agent-class/` + `session.ts`), not a
+   *  costume. */
+  readonly agentClass: string;
+  readonly cwd: string;
 }
 
 /** The claude process reported its session id (stream-json `system/init`). */
 export interface SessionStartedEvent extends EventBase {
-  kind: "agent.session_started";
-  sessionId: string;
+  readonly kind: "agent.session_started";
+  readonly sessionId: string;
 }
 
 /** A user turn was handed to the session — the initial task, or a follow-up
@@ -64,51 +72,49 @@ export interface SessionStartedEvent extends EventBase {
  *  full history and the journal are rebuildable from the log alone
  *  (VISION decision #3). `source` is `"user"`. */
 export interface AgentPromptEvent extends EventBase {
-  kind: "agent.prompt";
+  readonly kind: "agent.prompt";
   /** The user's message for this turn, verbatim. */
-  text: string;
+  readonly text: string;
 }
 
 /** One `query()` turn ended cleanly and the session can still be resumed — the
  *  agent is idle, awaiting a follow-up, NOT gone. `agent.exited` is reserved for
  *  a session that ended abnormally or was stopped. */
 export interface AgentTurnFinishedEvent extends EventBase {
-  kind: "agent.turn_finished";
+  readonly kind: "agent.turn_finished";
 }
 
 /** The model started a tool call. Drives the walk to a room. */
 export interface ToolStartedEvent extends EventBase {
-  kind: "tool.started";
-  toolCallId: string;
-  tool: string;
-  /** Raw tool input, as emitted. Kept whole so classification can improve
-   *  later without a schema change. */
-  input: Record<string, unknown>;
+  readonly kind: "tool.started";
+  readonly toolCallId: string;
+  readonly tool: string;
+  readonly input: ToolInput;
 }
 
 /** A tool call finished (result or error). */
 export interface ToolFinishedEvent extends EventBase {
-  kind: "tool.finished";
-  toolCallId: string;
+  readonly kind: "tool.finished";
+  readonly toolCallId: string;
   /** The tool name is often not on the result frame; the reducer pairs by
    *  `toolCallId` and does not need it. Present when the writer knows it. */
-  tool?: string;
-  ok: boolean;
+  readonly tool?: string;
+  readonly ok: boolean;
   /** Short human summary for the journal, e.g. "+42 / -7". Optional. */
-  summary?: string;
+  readonly summary?: string;
 }
 
 /** The model is producing extended-thinking reasoning, no tool in flight. The
  *  bubble-sized summary is all that is kept — the full reasoning is never
  *  written to the log. Visible assistant prose is a separate `agent.message`. */
 export interface AgentThinkingEvent extends EventBase {
-  kind: "agent.thinking";
+  readonly kind: "agent.thinking";
   /** One-line thought bubble, if there is text to show. */
-  thought?: string;
+  readonly thought?: string;
   /** `reasoning` = an extended-thinking block, the only value emitted now.
    *  `prose` is legacy — visible prose is its own `agent.message` event; old
    *  logs may still carry an `agent.thinking` with this channel. */
-  channel?: "reasoning" | "prose";
+  readonly channel?: "reasoning" | "prose";
 }
 
 /** One complete block of visible assistant prose — the agent's actual reply,
@@ -117,40 +123,40 @@ export interface AgentThinkingEvent extends EventBase {
  *  also derives the one-line thought bubble from it. Extended-thinking blocks
  *  are NOT carried here — that stays in `agent.thinking`. */
 export interface AgentMessageEvent extends EventBase {
-  kind: "agent.message";
+  readonly kind: "agent.message";
   /** The assistant's text for this block, verbatim. */
-  text: string;
+  readonly text: string;
 }
 
 /** Auto-compaction ran (stream-json `system/compact_boundary`). Carried now so
  *  the HP bar can be "a real automatic event" later without a new pipeline. */
 export interface SessionCompactedEvent extends EventBase {
-  kind: "session.compacted";
-  trigger?: string;
+  readonly kind: "session.compacted";
+  readonly trigger?: string;
 }
 
 /** A `canUseTool` request is pending — the agent is paused on the user. */
 export interface PermissionRequestedEvent extends EventBase {
-  kind: "permission.requested";
-  toolCallId: string;
-  tool: string;
-  input: Record<string, unknown>;
+  readonly kind: "permission.requested";
+  readonly toolCallId: string;
+  readonly tool: string;
+  readonly input: ToolInput;
 }
 
 /** The user answered a `canUseTool` request. */
 export interface PermissionResolvedEvent extends EventBase {
-  kind: "permission.resolved";
-  toolCallId: string;
-  decision: "allow_once" | "allow_always" | "refuse";
+  readonly kind: "permission.resolved";
+  readonly toolCallId: string;
+  readonly decision: "allow_once" | "allow_always" | "refuse";
 }
 
 /** The claude process / session ended. */
 export interface AgentExitedEvent extends EventBase {
-  kind: "agent.exited";
-  code: number | null;
+  readonly kind: "agent.exited";
+  readonly code: number | null;
   /** The SDK result subtype when it ended abnormally, e.g. `error_max_turns`,
    *  `error_max_budget_usd`. Absent on a clean finish. */
-  reason?: string;
+  readonly reason?: string;
 }
 
 export type PokeHubEvent =

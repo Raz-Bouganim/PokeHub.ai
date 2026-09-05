@@ -1,0 +1,28 @@
+.agent {
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--agent-color, transparent);
+  border-radius: 4px;
+  padding: 8px;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+
+.agent:hover {
+  border-color: var(--border-focus);
+}
+
+.agent.selected {
+  border-color: var(--accent);
+  /* keep the identity stripe — `border-color` above would blank it */
+  border-left-color: var(--agent-color, var(--accent));
+  background: var(--selected-bg);
+}
+
+.name {
+  color: var(--agent-color, inherit);
+}
+
+.stopBtn {
+  margin-left: 8px;
+  padding: 1px 8px;
+}

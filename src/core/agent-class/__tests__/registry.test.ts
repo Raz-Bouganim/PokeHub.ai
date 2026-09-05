@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bashCommandAllowed, knownClasses, toolsForClass } from "./classes.ts";
+import { bashCommandAllowed, knownClasses, toolsForClass } from "../registry.ts";
 
 describe("toolsForClass — classes are hard tool restrictions", () => {
   it("Reviewer finds problems but cannot fix or run them", () => {
@@ -35,13 +35,7 @@ describe("toolsForClass — classes are hard tool restrictions", () => {
   });
 
   it("knownClasses lists the five VISION classes", () => {
-    expect(knownClasses().sort()).toEqual([
-      "Builder",
-      "Keeper",
-      "Reviewer",
-      "Runner",
-      "Scout",
-    ]);
+    expect(knownClasses().sort()).toEqual(["Builder", "Keeper", "Reviewer", "Runner", "Scout"]);
   });
 });
 
@@ -86,14 +80,16 @@ describe("bashCommandAllowed — default-deny allow-list for Runner / Keeper", (
       "printf '14s/a/b/\\nw\\nq\\n' | ed -s src/auth.js",
       // more line editors / wrappers the allow-list stops for free
       "ex -sc '1,$d|x' src/auth.js",
-      "awk 'BEGIN{print \"\" > \"src/a.js\"}'",
+      'awk \'BEGIN{print "" > "src/a.js"}\'',
       "env NODE_OPTIONS=x npm test",
       "find . -name '*.test.ts' -delete",
       "cat list | xargs rm",
       "npm config set node-options='--require ./cheat.js'",
       'npm pkg set scripts.test="sed -i s/a/b/ src/x.js && node t.js"',
     ]) {
-      expect(bashCommandAllowed("Runner", cmd), cmd).toMatchObject({ ok: false });
+      expect(bashCommandAllowed("Runner", cmd), cmd).toMatchObject({
+        ok: false,
+      });
     }
   });
 
@@ -113,7 +109,9 @@ describe("bashCommandAllowed — default-deny allow-list for Runner / Keeper", (
       "git -c core.pager='!sh -c \"id\"' log",
       "git config core.hooksPath /tmp/hooks",
     ]) {
-      expect(bashCommandAllowed("Keeper", cmd), cmd).toMatchObject({ ok: false });
+      expect(bashCommandAllowed("Keeper", cmd), cmd).toMatchObject({
+        ok: false,
+      });
     }
   });
 
@@ -121,7 +119,9 @@ describe("bashCommandAllowed — default-deny allow-list for Runner / Keeper", (
     expect(bashCommandAllowed("Builder", "rm -rf dist && echo x > y")).toEqual({
       ok: true,
     });
-    expect(bashCommandAllowed("Wizard", "anything at all")).toEqual({ ok: true });
+    expect(bashCommandAllowed("Wizard", "anything at all")).toEqual({
+      ok: true,
+    });
   });
 
   it("carries the class reason on a denial", () => {

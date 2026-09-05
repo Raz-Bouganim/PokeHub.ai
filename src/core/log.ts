@@ -1,10 +1,16 @@
 /**
  * Pure NDJSON <-> event helpers. No I/O — the writer that actually touches disk
- * lives on the agent side (`src/agent/eventLog.ts`) and uses `serializeEvent`.
+ * lives on the agent side (`src/agent/event-log.ts`) and uses `serializeEvent`.
  */
 
 import type { PokeHubEvent } from "./events.ts";
 
+/**
+ * Serialize one event to a single NDJSON line (trailing newline included).
+ *
+ * @param event - the event to serialize
+ * @returns the JSON line, ending in `\n`
+ */
 export function serializeEvent(event: PokeHubEvent): string {
   return JSON.stringify(event) + "\n";
 }
@@ -17,6 +23,10 @@ export function serializeEvent(event: PokeHubEvent): string {
  * if the only thing after a bad line is blank lines, it is dropped and the
  * good events are returned. A malformed *interior* line is real corruption and
  * still throws, with the 1-based line number.
+ *
+ * @param text - the full log file contents
+ * @returns the parsed events, oldest first
+ * @throws if a non-final line is malformed JSON
  */
 export function parseLog(text: string): PokeHubEvent[] {
   const out: PokeHubEvent[] = [];

@@ -1,29 +1,45 @@
 import { describe, expect, it } from "vitest";
-import { reduce } from "../core/reducer.ts";
-import { initialWorld, type WorldState } from "../core/world.ts";
-import { SCHEMA_VERSION, type PokeHubEvent } from "../core/events.ts";
-import { translate, type EventDraft } from "./translate.ts";
+import { reduce } from "../../core/reducer.ts";
+import { initialWorld, type WorldState } from "../../core/world.ts";
+import { SCHEMA_VERSION, type PokeHubEvent } from "../../core/events.ts";
+import { translate, type EventDraft } from "../translate.ts";
 
 /** A recorded-shape slice of an SDK `query()` stream: init, a think, a tool
  *  call, its result, and the final result message. */
-const sdkStream: Array<Record<string, unknown>> = [
+const sdkStream: Record<string, unknown>[] = [
   { type: "system", subtype: "init", session_id: "sess-1", cwd: "/repo" },
   {
     type: "assistant",
     session_id: "sess-1",
-    message: { content: [{ type: "text", text: "Let me look for the router.\nThen I'll edit it." }] },
+    message: {
+      content: [
+        {
+          type: "text",
+          text: "Let me look for the router.\nThen I'll edit it.",
+        },
+      ],
+    },
   },
   {
     type: "assistant",
     session_id: "sess-1",
     message: {
-      content: [{ type: "tool_use", id: "tool-1", name: "Grep", input: { pattern: "router" } }],
+      content: [
+        {
+          type: "tool_use",
+          id: "tool-1",
+          name: "Grep",
+          input: { pattern: "router" },
+        },
+      ],
     },
   },
   {
     type: "user",
     session_id: "sess-1",
-    message: { content: [{ type: "tool_result", tool_use_id: "tool-1", is_error: false }] },
+    message: {
+      content: [{ type: "tool_result", tool_use_id: "tool-1", is_error: false }],
+    },
   },
   { type: "result", subtype: "success", session_id: "sess-1", is_error: false },
 ];
@@ -32,7 +48,13 @@ const sdkStream: Array<Record<string, unknown>> = [
 function stamp(drafts: EventDraft[]): PokeHubEvent[] {
   let seq = 0;
   return drafts.map(
-    (d) => ({ ...d, v: SCHEMA_VERSION, seq: ++seq, ts: "2026-08-29T12:00:00.000Z" }) as PokeHubEvent,
+    (d) =>
+      ({
+        ...d,
+        v: SCHEMA_VERSION,
+        seq: ++seq,
+        ts: "2026-08-29T12:00:00.000Z",
+      }) as PokeHubEvent,
   );
 }
 
@@ -40,7 +62,12 @@ describe("translate — SDK message -> event drafts", () => {
   it("emits session_started from the init frame", () => {
     const drafts = translate(sdkStream[0]!, "a1", null);
     expect(drafts).toEqual([
-      { kind: "agent.session_started", source: "agent", agentId: "a1", sessionId: "sess-1" },
+      {
+        kind: "agent.session_started",
+        source: "agent",
+        agentId: "a1",
+        sessionId: "sess-1",
+      },
     ]);
   });
 
@@ -64,16 +91,21 @@ describe("translate — SDK message -> event drafts", () => {
       session_id: "sess-1",
       message: { content: [{ type: "thinking", thinking: "hmm.\nok." }] },
     };
-    expect(translate(msg, "a1", "sess-1").map((d) => d.kind)).toEqual([
-      "agent.thinking",
-    ]);
+    expect(translate(msg, "a1", "sess-1").map((d) => d.kind)).toEqual(["agent.thinking"]);
   });
 
   it("turns an extended-thinking block into a reasoning thought", () => {
     const msg = {
       type: "assistant",
       session_id: "sess-1",
-      message: { content: [{ type: "thinking", thinking: "The router is probably in app/.\nCheck there." }] },
+      message: {
+        content: [
+          {
+            type: "thinking",
+            thinking: "The router is probably in app/.\nCheck there.",
+          },
+        ],
+      },
     };
     const [draft] = translate(msg, "a1", "sess-1");
     expect(draft).toMatchObject({
@@ -100,7 +132,12 @@ describe("translate — SDK message -> event drafts", () => {
       message: {
         content: [
           { type: "text", text: "Searching now." },
-          { type: "tool_use", id: "t9", name: "Glob", input: { pattern: "**/*.ts" } },
+          {
+            type: "tool_use",
+            id: "t9",
+            name: "Glob",
+            input: { pattern: "**/*.ts" },
+          },
         ],
       },
     };
@@ -110,17 +147,31 @@ describe("translate — SDK message -> event drafts", () => {
 
   it("turns a tool_result block into tool.finished keyed by the same id", () => {
     const [draft] = translate(sdkStream[3]!, "a1", "sess-1");
-    expect(draft).toMatchObject({ kind: "tool.finished", toolCallId: "tool-1", ok: true });
+    expect(draft).toMatchObject({
+      kind: "tool.finished",
+      toolCallId: "tool-1",
+      ok: true,
+    });
   });
 
   it("summarizes tool.finished from the structured tool_use_result (an edit diff)", () => {
     const msg = {
       type: "user",
       session_id: "s",
-      message: { content: [{ type: "tool_result", tool_use_id: "e1", is_error: false }] },
+      message: {
+        content: [{ type: "tool_result", tool_use_id: "e1", is_error: false }],
+      },
       tool_use_result: {
         filePath: "/repo/auth.ts",
-        structuredPatch: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 2, lines: ["-a", "+b", "+c"] }],
+        structuredPatch: [
+          {
+            oldStart: 1,
+            oldLines: 1,
+            newStart: 1,
+            newLines: 2,
+            lines: ["-a", "+b", "+c"],
+          },
+        ],
       },
     };
     expect(translate(msg, "a1", "s")[0]).toMatchObject({
@@ -144,7 +195,9 @@ describe("translate — SDK message -> event drafts", () => {
           { type: "tool_result", tool_use_id: "p2", is_error: false },
         ],
       },
-      tool_use_result: { structuredPatch: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: ["+x"] }] },
+      tool_use_result: {
+        structuredPatch: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: ["+x"] }],
+      },
     };
     const drafts = translate(msg, "a1", "s");
     expect(drafts).toHaveLength(2);
@@ -155,7 +208,9 @@ describe("translate — SDK message -> event drafts", () => {
     const msg = {
       type: "user",
       session_id: "s",
-      message: { content: [{ type: "tool_result", tool_use_id: "b1", is_error: false }] },
+      message: {
+        content: [{ type: "tool_result", tool_use_id: "b1", is_error: false }],
+      },
       tool_use_result: { stdout: "ok", stderr: "", interrupted: false },
     };
     expect(translate(msg, "a1", "s")[0]).not.toHaveProperty("summary");
@@ -165,7 +220,9 @@ describe("translate — SDK message -> event drafts", () => {
     const errResult = {
       type: "user",
       session_id: "s",
-      message: { content: [{ type: "tool_result", tool_use_id: "x", is_error: true }] },
+      message: {
+        content: [{ type: "tool_result", tool_use_id: "x", is_error: true }],
+      },
     };
     expect(translate(errResult, "a1", "s")[0]).toMatchObject({ ok: false });
   });
@@ -181,9 +238,18 @@ describe("translate — SDK message -> event drafts", () => {
   });
 
   it("carries the SDK subtype as `reason` on an error result frame", () => {
-    const msg = { type: "result", subtype: "error_max_turns", session_id: "s", is_error: true };
+    const msg = {
+      type: "result",
+      subtype: "error_max_turns",
+      session_id: "s",
+      is_error: true,
+    };
     const [draft] = translate(msg, "a1", "s");
-    expect(draft).toMatchObject({ kind: "agent.exited", code: 1, reason: "error_max_turns" });
+    expect(draft).toMatchObject({
+      kind: "agent.exited",
+      code: 1,
+      reason: "error_max_turns",
+    });
   });
 
   it("emits session.compacted from a compact_boundary frame", () => {
@@ -194,11 +260,19 @@ describe("translate — SDK message -> event drafts", () => {
       compact_metadata: { trigger: "auto", pre_tokens: 100000 },
     };
     const [draft] = translate(msg, "a1", "s");
-    expect(draft).toMatchObject({ kind: "session.compacted", trigger: "auto", source: "system" });
+    expect(draft).toMatchObject({
+      kind: "session.compacted",
+      trigger: "auto",
+      source: "system",
+    });
   });
 
   it("ignores a user message whose content is a plain string", () => {
-    const msg = { type: "user", session_id: "s", message: { content: "hello" } };
+    const msg = {
+      type: "user",
+      session_id: "s",
+      message: { content: "hello" },
+    };
     expect(translate(msg, "a1", "s")).toEqual([]);
   });
 

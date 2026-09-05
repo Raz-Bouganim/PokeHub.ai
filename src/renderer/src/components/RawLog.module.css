@@ -1,0 +1,38 @@
+.rawLog {
+  flex: 1;
+  min-height: 0;
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.filter {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--fg-dim);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.line {
+  white-space: pre-wrap;
+  word-break: break-all;
+  border-bottom: 1px solid #1e1f38;
+  border-left: 3px solid var(--agent-color, transparent);
+  padding: 2px 0 2px 6px;
+}
+
+.agent {
+  font-weight: 600;
+  color: var(--agent-color, inherit);
+}
+
+.kind {
+  color: var(--status-active);
+}

@@ -1,7 +1,7 @@
 /**
  * Pure translation: one SDK stream message -> zero or more PokeHub event drafts.
  *
- * "Draft" = the event without `v`, `seq`, `ts`. The writer (`eventLog.ts`) stamps
+ * "Draft" = the event without `v`, `seq`, `ts`. The writer (`event-log.ts`) stamps
  * those, because sequence and wall-clock are its job, not the translator's. This
  * keeps translation pure and unit-testable against recorded SDK messages.
  *
@@ -10,11 +10,10 @@
  */
 
 import type { PokeHubEvent } from "../core/events.ts";
-import { bubbleLine, summarizeToolOutput } from "../core/text.ts";
+import { bubbleLine } from "../core/text/bubble-line.ts";
+import { summarizeToolOutput } from "../core/text/summarize-tool-output.ts";
 
-type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
-  ? Omit<T, K>
-  : never;
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
 export type EventDraft = DistributiveOmit<PokeHubEvent, "v" | "seq" | "ts">;
 
@@ -55,11 +54,7 @@ function contentBlocks(msg: SdkMessageLike): ContentBlock[] {
  * @param agentId   PokeHub's stable id for this sprite
  * @param sessionId last-known session id (used until the SDK reports one)
  */
-export function translate(
-  raw: unknown,
-  agentId: string,
-  sessionId: string | null,
-): EventDraft[] {
+export function translate(raw: unknown, agentId: string, sessionId: string | null): EventDraft[] {
   const msg = raw as SdkMessageLike;
   if (!msg || typeof msg.type !== "string") return [];
   const sid = msg.session_id ?? sessionId;
@@ -81,9 +76,7 @@ export function translate(
           source: "system",
           agentId,
           sessionId: sid,
-          ...(msg.compact_metadata?.trigger
-            ? { trigger: msg.compact_metadata.trigger }
-            : {}),
+          ...(msg.compact_metadata?.trigger ? { trigger: msg.compact_metadata.trigger } : {}),
         });
       }
       break;

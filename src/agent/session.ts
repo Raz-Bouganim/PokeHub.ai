@@ -18,9 +18,9 @@
 
 import { query, type CanUseTool } from "@anthropic-ai/claude-agent-sdk";
 import type { PokeHubEvent } from "../core/events.ts";
-import { bashCommandAllowed, toolsForClass } from "../core/classes.ts";
+import { bashCommandAllowed, toolsForClass } from "../core/agent-class/registry.ts";
 import type { PermissionAsk, PermissionDecision } from "../shared/permissions.ts";
-import { EventLog } from "./eventLog.ts";
+import { EventLog } from "./event-log.ts";
 import { translate } from "./translate.ts";
 
 export type { PermissionAsk, PermissionDecision };
@@ -88,7 +88,7 @@ export function spawnAgent(opts: SpawnAgentOptions): AgentHandle {
     abort.abort();
   });
 
-  const emit = (draft: Parameters<typeof log.append>[0]) => {
+  const emit = (draft: Parameters<typeof log.append>[0]): PokeHubEvent => {
     const event = log.append(draft);
     if (event.kind === "agent.session_started") sessionId = event.sessionId;
     else if (event.kind === "agent.prompt") lifecycle = "running";
@@ -117,11 +117,7 @@ export function spawnAgent(opts: SpawnAgentOptions): AgentHandle {
 
   const classTools = toolsForClass(opts.agentClass);
 
-  const canUseTool: CanUseTool = async (
-    toolName,
-    input,
-    { toolUseID, title, suggestions },
-  ) => {
+  const canUseTool: CanUseTool = async (toolName, input, { toolUseID, title, suggestions }) => {
     emit({
       kind: "permission.requested",
       source: "agent",
@@ -137,8 +133,7 @@ export function spawnAgent(opts: SpawnAgentOptions): AgentHandle {
     // only") are gated here, at call time. The user is not asked — the class
     // already decided.
     if (toolName === "Bash") {
-      const command =
-        typeof input["command"] === "string" ? input["command"] : "";
+      const command = typeof input["command"] === "string" ? input["command"] : "";
       const verdict = bashCommandAllowed(opts.agentClass, command);
       if (!verdict.ok) {
         emit({
@@ -163,9 +158,7 @@ export function spawnAgent(opts: SpawnAgentOptions): AgentHandle {
       ...(title ? { title } : {}),
     };
 
-    const decision = opts.requestPermission
-      ? await opts.requestPermission(ask)
-      : "allow_once";
+    const decision = opts.requestPermission ? await opts.requestPermission(ask) : "allow_once";
 
     emit({
       kind: "permission.resolved",
@@ -212,9 +205,7 @@ export function spawnAgent(opts: SpawnAgentOptions): AgentHandle {
         }
       }
     } catch (err) {
-      const aborted =
-        abort.signal.aborted ||
-        (err instanceof Error && err.name === "AbortError");
+      const aborted = abort.signal.aborted || (err instanceof Error && err.name === "AbortError");
 
       if (!hasExited()) {
         if (!aborted || logError) {
@@ -238,11 +229,7 @@ export function spawnAgent(opts: SpawnAgentOptions): AgentHandle {
           agentId: opts.agentId,
           sessionId,
           code: null,
-          ...(logError
-            ? { reason: "log write failed" }
-            : aborted
-              ? { reason: "stopped" }
-              : {}),
+          ...(logError ? { reason: "log write failed" } : aborted ? { reason: "stopped" } : {}),
         });
       }
     }

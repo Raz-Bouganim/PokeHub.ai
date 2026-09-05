@@ -2,6 +2,7 @@
 
 Desktop app that drives the user's own installed Claude Code and renders parallel agents
 as a Pokemon-style map. Full spec: @VISION.md — read it before any design decision.
+How we write the code in this repo: @docs/STANDARDS.md — follow it for any code change.
 
 ## The two rules
 1. **Every game element encodes real state.** No decoration that could be mistaken for
@@ -31,10 +32,11 @@ after the spike.
 - All art original or CC0. No Nintendo assets, names or fonts.
 
 ## Current phase
-**Phase 2 — Parallel.** Phase 1 (Legibility) is done and verified. Now: N concurrent agents,
-subagent tethering (nesting made visible), town overview (the "am I done?" zoom), and a visible
-rate-limit budget. This is the core bet — parallel state at a glance beats N scrollbacks. Real
-art / UI polish is still Phase 3, not now.
+**Phase 2 — Parallel.** Phase 1 (Legibility) and Phase 1.5 (coding-standards refactor, on
+branch `phase-1.5-coding-standards` — merge before starting) are done. Now: N concurrent
+agents, subagent tethering (nesting made visible), town overview (the "am I done?" zoom), and a
+visible rate-limit budget. This is the core bet — parallel state at a glance beats N
+scrollbacks. Real art / UI polish is still Phase 3, not now.
 
 ## Session hygiene
 - `/kickoff` at the start of a session, `/wrap-up` at the end.

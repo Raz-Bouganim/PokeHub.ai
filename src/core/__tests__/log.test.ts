@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { PokeHubEvent } from "./events.ts";
-import { parseLog, serializeEvent } from "./log.ts";
+import type { PokeHubEvent } from "../events.ts";
+import { parseLog, serializeEvent } from "../log.ts";
 
 const sample: PokeHubEvent[] = [
   {
@@ -36,8 +36,7 @@ describe("log", () => {
   });
 
   it("skips blank lines anywhere in the log", () => {
-    const text =
-      "\n" + serializeEvent(sample[0]!) + "\n\n" + serializeEvent(sample[1]!) + "\n";
+    const text = "\n" + serializeEvent(sample[0]!) + "\n\n" + serializeEvent(sample[1]!) + "\n";
     expect(parseLog(text)).toEqual(sample);
   });
 
@@ -52,8 +51,7 @@ describe("log", () => {
   });
 
   it("throws with the line number on a malformed interior line", () => {
-    const text =
-      serializeEvent(sample[0]!) + "{not json}\n" + serializeEvent(sample[1]!);
+    const text = serializeEvent(sample[0]!) + "{not json}\n" + serializeEvent(sample[1]!);
     expect(() => parseLog(text)).toThrow(/line 2/);
   });
 });

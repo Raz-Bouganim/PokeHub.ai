@@ -7,9 +7,9 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import type { PokeHubEvent } from "../../core/events.ts";
-import { reduce } from "../../core/reducer.ts";
-import { initialWorld, type WorldState } from "../../core/world.ts";
+import type { PokeHubEvent } from "../../../core/events.ts";
+import { reduce } from "../../../core/reducer.ts";
+import { initialWorld, type WorldState } from "../../../core/world.ts";
 
 export function useWorld(): { world: WorldState; log: PokeHubEvent[] } {
   const [world, setWorld] = useState<WorldState>(initialWorld);
@@ -27,7 +27,7 @@ export function useWorld(): { world: WorldState; log: PokeHubEvent[] } {
     let ready = false;
     let buffer: PokeHubEvent[] = [];
 
-    const feed = (event: PokeHubEvent) => {
+    const feed = (event: PokeHubEvent): void => {
       const next = reduce(worldRef.current, event);
       if (next === worldRef.current) return; // de-duped by the reducer
       worldRef.current = next;

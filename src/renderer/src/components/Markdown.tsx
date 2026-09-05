@@ -10,9 +10,11 @@
  */
 
 import type { ReactNode } from "react";
+import { cx } from "../cx.ts";
+import styles from "./Markdown.module.css";
 
 export function Markdown({ text }: { text: string }): JSX.Element {
-  return <div className="md">{parseBlocks(text)}</div>;
+  return <div className={styles.md}>{parseBlocks(text)}</div>;
 }
 
 function parseBlocks(src: string): ReactNode[] {
@@ -20,7 +22,7 @@ function parseBlocks(src: string): ReactNode[] {
   const out: ReactNode[] = [];
   let i = 0;
   let k = 0;
-  const key = () => `b${k++}`;
+  const key = (): string => `b${k++}`;
 
   const isBlockStart = (s: string): boolean =>
     s.startsWith("```") ||
@@ -49,7 +51,7 @@ function parseBlocks(src: string): ReactNode[] {
       }
       i++; // closing fence
       out.push(
-        <pre key={key()} className="md-pre">
+        <pre key={key()} className={styles.pre}>
           <code>{buf.join("\n")}</code>
         </pre>,
       );
@@ -61,7 +63,7 @@ function parseBlocks(src: string): ReactNode[] {
     if (h) {
       const lvl = Math.min(h[1]!.length, 4);
       out.push(
-        <div key={key()} className={`md-h md-h${lvl}`}>
+        <div key={key()} className={cx(styles.h, styles[`h${lvl}`])}>
           {inline(h[2] ?? "", key())}
         </div>,
       );
@@ -71,7 +73,7 @@ function parseBlocks(src: string): ReactNode[] {
 
     // Thematic break.
     if (/^([-*_])\1{2,}$/.test(t)) {
-      out.push(<hr key={key()} className="md-hr" />);
+      out.push(<hr key={key()} className={styles.hr} />);
       i++;
       continue;
     }
@@ -87,8 +89,8 @@ function parseBlocks(src: string): ReactNode[] {
         i++;
       }
       out.push(
-        <div key={key()} className="md-table-wrap">
-          <table className="md-table">
+        <div key={key()} className={styles.tableWrap}>
+          <table className={styles.table}>
             <thead>
               <tr>
                 {header.map((c, j) => (
@@ -119,7 +121,7 @@ function parseBlocks(src: string): ReactNode[] {
         i++;
       }
       out.push(
-        <blockquote key={key()} className="md-quote">
+        <blockquote key={key()} className={styles.quote}>
           {inline(buf.join(" "), key())}
         </blockquote>,
       );
@@ -130,21 +132,18 @@ function parseBlocks(src: string): ReactNode[] {
     if (/^([-*+]|\d+\.)\s+/.test(t)) {
       const ordered = /^\d+\.\s/.test(t);
       const items: string[] = [];
-      while (
-        i < lines.length &&
-        /^([-*+]|\d+\.)\s+/.test((lines[i] ?? "").trim())
-      ) {
+      while (i < lines.length && /^([-*+]|\d+\.)\s+/.test((lines[i] ?? "").trim())) {
         items.push((lines[i] ?? "").trim().replace(/^([-*+]|\d+\.)\s+/, ""));
         i++;
       }
       const lis = items.map((it, li) => <li key={li}>{inline(it, key())}</li>);
       out.push(
         ordered ? (
-          <ol key={key()} className="md-list">
+          <ol key={key()} className={styles.list}>
             {lis}
           </ol>
         ) : (
-          <ul key={key()} className="md-list">
+          <ul key={key()} className={styles.list}>
             {lis}
           </ul>
         ),
@@ -165,7 +164,7 @@ function parseBlocks(src: string): ReactNode[] {
       i++;
     }
     out.push(
-      <p key={key()} className="md-p">
+      <p key={key()} className={styles.p}>
         {inline(buf.join(" "), key())}
       </p>,
     );
@@ -178,8 +177,7 @@ function parseBlocks(src: string): ReactNode[] {
  *  so markers inside a code span are left alone. */
 function inline(text: string, keyPrefix: string): ReactNode[] {
   const nodes: ReactNode[] = [];
-  const re =
-    /(`[^`]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*]+\*)|(\[[^\]]+\]\([^)]+\))/g;
+  const re = /(`[^`]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*]+\*)|(\[[^\]]+\]\([^)]+\))/g;
   let last = 0;
   let n = 0;
   let m: RegExpExecArray | null;
@@ -197,7 +195,7 @@ function inline(text: string, keyPrefix: string): ReactNode[] {
     } else {
       const lm = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(tok);
       nodes.push(
-        <span className="md-link" title={lm?.[2]} key={k}>
+        <span className={styles.link} title={lm?.[2]} key={k}>
           {lm?.[1] ?? tok}
         </span>,
       );
