@@ -14,7 +14,8 @@
 
 import type { PokeHubEvent } from "./events.ts";
 import { roomForTool } from "./rooms.ts";
-import { bubbleLine, toolKind, toolTarget } from "./text.ts";
+import { bubbleLine } from "./text/bubble-line.ts";
+import { toolKind, toolTarget } from "./text/tool-labels.ts";
 import {
   RECENT_TOOLS_LIMIT,
   TRANSCRIPT_LIMIT,

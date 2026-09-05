@@ -4,7 +4,7 @@ import type { PermissionAskEnvelope } from "../../shared/ipc.ts";
 import type { PermissionDecision } from "../../shared/permissions.ts";
 import { knownClasses } from "../../core/classes.ts";
 import { agentList } from "../../core/selectors.ts";
-import { agentHue } from "../../core/text.ts";
+import { agentColor } from "../../core/text/agent-color.ts";
 import { useWorld } from "./use-world.ts";
 import { WorldMap } from "./WorldMap.tsx";
 import { AgentFocus } from "./AgentFocus.tsx";
@@ -252,12 +252,6 @@ export function App() {
       )}
     </div>
   );
-}
-
-/** Same colour for the same agent everywhere it appears (agent list, raw log,
- *  sprite accent ring in the map). */
-function agentColor(agentId: string): string {
-  return `hsl(${agentHue(agentId)}, 65%, 65%)`;
 }
 
 function summarize(e: PokeHubEvent): string {

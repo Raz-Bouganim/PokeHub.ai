@@ -10,7 +10,8 @@
  */
 
 import type { PokeHubEvent } from "../core/events.ts";
-import { bubbleLine, summarizeToolOutput } from "../core/text.ts";
+import { bubbleLine } from "../core/text/bubble-line.ts";
+import { summarizeToolOutput } from "../core/text/summarize-tool-output.ts";
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 

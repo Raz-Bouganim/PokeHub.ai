@@ -18,7 +18,7 @@ import { Application, Container, Graphics, Text } from "pixi.js";
 import type { Location } from "../../core/events.ts";
 import type { AgentStatus, WorldState } from "../../core/world.ts";
 import { agentList } from "../../core/selectors.ts";
-import { agentHue } from "../../core/text.ts";
+import { agentColor } from "../../core/text/agent-color.ts";
 
 const W = 600;
 const H = 440;
@@ -220,7 +220,7 @@ function renderAgents(
       // so the same agent reads the same everywhere (raw log rows too).
       s.body.circle(0, 0, 11).stroke({
         width: 1.5,
-        color: `hsl(${agentHue(a.id)}, 65%, 65%)`,
+        color: agentColor(a.id),
         alpha: 0.9,
       });
       if (a.status === "blocked" || a.status === "erroring") {
