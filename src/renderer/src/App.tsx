@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { PokeHubEvent } from "../../core/events.ts";
 import type { PermissionAskEnvelope } from "../../shared/ipc.ts";
 import type { PermissionDecision } from "../../shared/permissions.ts";
-import { knownClasses } from "../../core/classes.ts";
+import { knownClasses } from "../../core/agent-class/registry.ts";
 import { agentList } from "../../core/selectors.ts";
 import { agentColor } from "../../core/text/agent-color.ts";
 import { useWorld } from "./use-world.ts";

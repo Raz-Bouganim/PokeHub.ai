@@ -18,7 +18,7 @@
 
 import { query, type CanUseTool } from "@anthropic-ai/claude-agent-sdk";
 import type { PokeHubEvent } from "../core/events.ts";
-import { bashCommandAllowed, toolsForClass } from "../core/classes.ts";
+import { bashCommandAllowed, toolsForClass } from "../core/agent-class/registry.ts";
 import type { PermissionAsk, PermissionDecision } from "../shared/permissions.ts";
 import { EventLog } from "./event-log.ts";
 import { translate } from "./translate.ts";
