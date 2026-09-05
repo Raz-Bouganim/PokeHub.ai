@@ -31,11 +31,10 @@ after the spike.
 - All art original or CC0. No Nintendo assets, names or fonts.
 
 ## Current phase
-**Phase 1 — Legibility.** Follow-up interaction + full assistant-text capture + agent-focus
-view + per-agent raw-stream filter + journal with diffs + room set + encounter dialog have
-landed. Checklist reads complete; next session confirms it end-to-end via a real agent before
-calling Phase 1 done and moving to Phase 2. Bar: it beats a terminal for a *single* agent. Real
-art / UI polish is Phase 3, not now.
+**Phase 2 — Parallel.** Phase 1 (Legibility) is done and verified. Now: N concurrent agents,
+subagent tethering (nesting made visible), town overview (the "am I done?" zoom), and a visible
+rate-limit budget. This is the core bet — parallel state at a glance beats N scrollbacks. Real
+art / UI polish is still Phase 3, not now.
 
 ## Session hygiene
 - `/kickoff` at the start of a session, `/wrap-up` at the end.

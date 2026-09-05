@@ -5,18 +5,17 @@ The spec is `VISION.md`. The always-on rules are `CLAUDE.md`.
 
 ## Next up
 
-**Phase 1 — Legibility.** Goal for the phase: full room set for one project, encounter-style
-permission dialog, journal with diffs, raw-stream toggle — and it must genuinely beat a
-terminal for a *single* agent. Follow-up interaction + full-text capture + agent-focus view +
-per-agent raw-log filter/colour + journal with diffs + cwd normalization + room-set/encounter-
-dialog audit (two real legibility bugs found and fixed) all landed. Phase 1's checklist now
-reads as essentially complete.
+**Phase 2 — Parallel.** Phase 1 is done (verified 2026-09-05, see Done). The core bet:
+N concurrent agents readable at a glance, subagent tethering (nesting made visible instead of
+inferred from transcript indentation), the town overview (every project a building, all agents
+as dots — the "am I done?" zoom), and a visible rate-limit / budget gauge (PP/Money in VISION's
+glance table). This is the phase that proves or kills the thesis.
 
-**Start here — decide whether Phase 1 is actually done and move to Phase 2, or find what's
-still missing.** Re-read the Phase 1 bar in CLAUDE.md/VISION.md, then spawn 1-2 real agents via
-`npm run dev` + the actual Electron window (not Chrome — Chrome can't drive it, see Gotchas) to
-sanity-check the whole pipeline end to end one more time before declaring it done. If it holds,
-move to Phase 2 (N concurrent agents, subagent tethering, town overview, rate-limit budget).
+**Start here — pick the first Phase 2 slice.** Likely order: (1) make the map read well with
+several agents at once — the current Route label overlap (see Gotchas / the 2026-09-05 verify
+entry) is the first thing that breaks with >1 parked agent; (2) subagent tethering, which needs
+the `translate` layer to emit a parent/child link when the SDK dispatches a Task; (3) town
+overview as a new zoom level; (4) the budget gauge. Confirm scope with the user before building.
 
 Then, in rough priority order:
 - Swap the hand-rolled `Markdown.tsx` for `react-markdown` **only if** the transcript becomes
@@ -51,6 +50,24 @@ Reference notes:
 
 ## Done
 
+- **2026-09-05** — **Phase 1 end-to-end verification — Phase 1 declared done, moving to
+  Phase 2.** Two-part check. (1) Real pipeline, headless: `npm run spike` ran a real Builder
+  (`claude` 2.1.261) against a throwaway repo — walked Library→Forge→Gym, raised real
+  `canUseTool` asks, wrote correct code, `npm test` passed, ended `turn_finished`→`idle`→clean
+  stop. Journal captured `+2 / -1` diffs, Read line-counts, verbatim transcript; reducer output
+  matched. (2) Renderer, live in Chrome via the throwaway `pokehub-stub.js` technique (see
+  Gotchas) driven with real-shaped replayed events: map (4 rooms + Route, sprite room placement,
+  status tint, per-agent accent ring, selection ring), encounter dialog (command shown, Always
+  gated on `canRemember`), AgentFocus (conversation + `journal (N)` tabs, turn grouping,
+  kind-coloured borders, diffs, ✓/✕ marks, recent-tools trail), raw log (per-agent colour +
+  `only <agent>` filter), composer (follow-up mode on select, `followUpAgent` clears the prompt,
+  exited-agent → spawn-mode + yellow notice), erroring/exited sprite states — all correct.
+  tsc clean, 120 tests pass. **Could not** drive a real agent through the actual Electron window
+  (claude-in-chrome can't touch the `BrowserWindow`); the two halves are each verified and the
+  main↔renderer IPC glue is unchanged since prior live verification. **One rough spot, not a
+  Phase 1 blocker, now the first Phase 2 target:** two agents parked on the Route overlap their
+  name/bubble labels — `clampCenteredX()` handles edge-clipping, not inter-sprite collision.
+  No code changed this session (stub file + its `index.html` script tag added then reverted).
 - **2026-09-05** — **Room-set/encounter-dialog audit + two map legibility fixes** (Phase 1).
   Drove the renderer live through Chrome using a synthetic `window.pokehub` stub (see
   Gotchas) rather than asking the user to eyeball it. Found the room set (Library/Forge/
@@ -158,6 +175,10 @@ Reference notes:
 
 ## Decisions
 
+- **2026-09-05** — Phase 1 declared done on **split verification** (real pipeline proven
+  headless via `npm run spike`; renderer proven live in Chrome via the stub), not a single
+  real-agent-through-Electron run — `claude-in-chrome` can't drive the `BrowserWindow`, the two
+  halves each pass, and the main↔renderer IPC is unchanged since prior sessions verified it live.
 - **2026-09-05** — Chasing the "exited agent's name label doesn't render" lead stopped once
   isolation testing (a lone agent spawned+exited in its own tick) rendered fine — the failure
   only reproduced under a 12-agent single-tick synthetic batch, a load pattern real usage never
@@ -290,7 +311,16 @@ _Things learned the hard way. One line each — what broke, and what fixed it._
   objects via `javascript_tool` to drive any scenario (multi-agent rooms, permission asks,
   exited/erroring states) without touching a real repo or spending real API usage. **Delete the
   stub file and revert the `index.html` script tag when done** — same throwaway-script
-  convention as `scripts/_dump-<x>.mjs`, not part of the app.
+  convention as `scripts/_dump-<x>.mjs`, not part of the app. _Re-used 2026-09-05 for the Phase
+  1 verification; that stub also exposed a `window.__ask(ask)` helper that calls the
+  `onPermissionAsk` handler directly, which is how the encounter dialog got driven. Helper names
+  are arbitrary per throwaway — this run used `__push` / `__ask`._
+- **A real agent's first `Read`/`Edit` of a file often fails with a relative path** and it
+  immediately retries with an absolute one (Claude Code requires absolute paths). Confirmed in
+  the 2026-09-05 spike: `add.js` and `add.test.js` each logged a failed `Read` (`ok: false`)
+  then a successful one. This is faithful rendering of real behaviour, not a bug — but it means
+  a healthy run legitimately shows ✕ entries in the journal / recent-tools trail, so "✕ then ✓
+  on the same target" is normal, not a problem to chase.
 - **A single synthetic batch of many agents pushed in one JS tick can make a Pixi `Text` label
   silently fail to render** (confirmed live: 12 agents pushed via one `javascript_exec` call,
   one exited agent's name never appeared on the map despite every inspectable Pixi property —
