@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { PokeHubEvent } from "./events.ts";
-import { parseLog, serializeEvent } from "./log.ts";
+import type { PokeHubEvent } from "../events.ts";
+import { parseLog, serializeEvent } from "../log.ts";
 
 const sample: PokeHubEvent[] = [
   {

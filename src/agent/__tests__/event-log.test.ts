@@ -2,9 +2,9 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { parseLog } from "../core/log.ts";
-import type { EventDraft } from "./translate.ts";
-import { EventLog } from "./eventLog.ts";
+import { parseLog } from "../../core/log.ts";
+import type { EventDraft } from "../translate.ts";
+import { EventLog } from "../event-log.ts";
 
 const draft = (agentId: string): EventDraft => ({
   kind: "agent.thinking",

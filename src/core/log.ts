@@ -1,6 +1,6 @@
 /**
  * Pure NDJSON <-> event helpers. No I/O — the writer that actually touches disk
- * lives on the agent side (`src/agent/eventLog.ts`) and uses `serializeEvent`.
+ * lives on the agent side (`src/agent/event-log.ts`) and uses `serializeEvent`.
  */
 
 import type { PokeHubEvent } from "./events.ts";

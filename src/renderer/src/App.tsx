@@ -5,7 +5,7 @@ import type { PermissionDecision } from "../../shared/permissions.ts";
 import { knownClasses } from "../../core/classes.ts";
 import { agentList } from "../../core/selectors.ts";
 import { agentHue } from "../../core/text.ts";
-import { useWorld } from "./useWorld.ts";
+import { useWorld } from "./use-world.ts";
 import { WorldMap } from "./WorldMap.tsx";
 import { AgentFocus } from "./AgentFocus.tsx";
 

@@ -6,7 +6,7 @@ import {
   summarizeToolOutput,
   toolKind,
   toolTarget,
-} from "./text.ts";
+} from "../text.ts";
 
 describe("bubbleLine — a longer reply as one bubble line", () => {
   it("takes the first sentence, not the whole first line", () => {

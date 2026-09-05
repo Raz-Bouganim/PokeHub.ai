@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { roomForTool } from "./rooms.ts";
+import { roomForTool } from "../rooms.ts";
 
 describe("roomForTool", () => {
   it("routes read-family tools to the Library", () => {

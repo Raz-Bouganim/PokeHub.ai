@@ -1,7 +1,7 @@
 /**
  * Pure translation: one SDK stream message -> zero or more PokeHub event drafts.
  *
- * "Draft" = the event without `v`, `seq`, `ts`. The writer (`eventLog.ts`) stamps
+ * "Draft" = the event without `v`, `seq`, `ts`. The writer (`event-log.ts`) stamps
  * those, because sequence and wall-clock are its job, not the translator's. This
  * keeps translation pure and unit-testable against recorded SDK messages.
  *

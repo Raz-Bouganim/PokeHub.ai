@@ -1,11 +1,11 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
-import type { PokeHubEvent } from "./events.ts";
-import { parseLog } from "./log.ts";
-import { reduce, replay } from "./reducer.ts";
-import { isStalled, needsAttention } from "./selectors.ts";
-import { initialWorld, TRANSCRIPT_LIMIT } from "./world.ts";
+import type { PokeHubEvent } from "../events.ts";
+import { parseLog } from "../log.ts";
+import { reduce, replay } from "../reducer.ts";
+import { isStalled, needsAttention } from "../selectors.ts";
+import { initialWorld, TRANSCRIPT_LIMIT } from "../world.ts";
 
 const fixture = fileURLToPath(
   new URL("./__fixtures__/one-agent-two-rooms.ndjson", import.meta.url),

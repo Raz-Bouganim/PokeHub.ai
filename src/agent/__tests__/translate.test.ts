@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { reduce } from "../core/reducer.ts";
-import { initialWorld, type WorldState } from "../core/world.ts";
-import { SCHEMA_VERSION, type PokeHubEvent } from "../core/events.ts";
-import { translate, type EventDraft } from "./translate.ts";
+import { reduce } from "../../core/reducer.ts";
+import { initialWorld, type WorldState } from "../../core/world.ts";
+import { SCHEMA_VERSION, type PokeHubEvent } from "../../core/events.ts";
+import { translate, type EventDraft } from "../translate.ts";
 
 /** A recorded-shape slice of an SDK `query()` stream: init, a think, a tool
  *  call, its result, and the final result message. */

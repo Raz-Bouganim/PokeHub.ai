@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bashCommandAllowed, knownClasses, toolsForClass } from "./classes.ts";
+import { bashCommandAllowed, knownClasses, toolsForClass } from "../classes.ts";
 
 describe("toolsForClass — classes are hard tool restrictions", () => {
   it("Reviewer finds problems but cannot fix or run them", () => {
