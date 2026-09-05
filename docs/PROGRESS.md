@@ -5,23 +5,23 @@ The spec is `VISION.md`. The always-on rules are `CLAUDE.md`.
 
 ## Next up
 
-**Phase 1.5 — Coding standards + refactor (in progress, started 2026-09-05).** `docs/STANDARDS.md`
-is written and approved (4 rounds of decisions). The codebase is being brought to it on branch
-`phase-1.5-coding-standards`, one reviewable commit per slice, `npm run check` green between each.
-Plan: `~/.claude/plans/eventual-sparking-feigenbaum.md`. Slices: 0 tooling (prettier + eslint) ·
-1 `__tests__/` + kebab-case · 2 core readonly/return-types/JSDoc · 3 split `text.ts` · 4
-`agent-class/` strategy modules · 5 `AgentSupervisor` · 6 CSS Modules · 7 renderer hooks/component
-split · 8 sweep + QA. **Phase 2 resumes in a fresh session once this merges.**
+**Phase 1.5 (coding standards + refactor) is done — see Done, 2026-09-05.** It lives on branch
+`phase-1.5-coding-standards` (9 commits, `npm run check` + `npm run build` + spike all green,
+129 tests). **Not yet merged to `main`** — review the branch, then `git merge` it before
+starting Phase 2 work. `docs/STANDARDS.md` is now the code-conventions authority (referenced
+from `CLAUDE.md`); follow it for every change.
 
-**Phase 2 — Parallel (paused for Phase 1.5).** Phase 1 done (verified 2026-09-05). Slice 1
-(multi-agent map legibility) done 2026-09-05 (see Done). Remaining slices, in order:
+**Phase 2 — Parallel.** Phase 1 done (verified 2026-09-05). Slice 1 (multi-agent map
+legibility) done 2026-09-05 (see Done). Remaining slices, in order:
 
 **Start here — Slice 2: subagent tethering.** Make nesting visible instead of inferred from
 transcript indentation. A one-off subagent should render tethered to (and following) its parent
 sprite. Concretely: (a) `src/agent/translate.ts` needs to emit a parent→child link when the SDK
-dispatches a `Task` tool call — the `Task` tool-use carries the subagent prompt; the child's own
-stream arrives under a different session id. Find where translate sees `Task` and thread a
-`parentAgentId` through. (b) The event schema (`src/core/events.ts`) needs the parent id on
+dispatches a `Task` tool call — the `Task` tool-use carries the subagent prompt. Find where
+translate sees `Task` and thread a `parentAgentId` through. **First verify how the SDK actually
+surfaces subagent activity** — likely the *same* `query()` stream tagged with
+`parent_tool_use_id`, not a separate session id as this note originally assumed. Spike it with a
+throwaway `scripts/_dump-task.mjs` before designing the event. (b) The event schema (`src/core/events.ts`) needs the parent id on
 `agent.spawned` (or a new `agent.tethered` event — decide based on whether the parent is known
 at spawn time). (c) The reducer (`src/core/reducer.ts`) stores it on `AgentState`. (d)
 `WorldMap.tsx` draws a line from child to parent and offsets the child's cell position toward
@@ -38,22 +38,30 @@ Then, in rough priority order:
   central and the mini-renderer's gaps (nested lists, task lists) start to bite. Not now.
 - UI refactor / real art is **Phase 3**, not now — acknowledged and deferred on purpose.
 
-Reference notes:
-- The map is `src/renderer/src/WorldMap.tsx`, mounted in `App.tsx` as a panel *beside* the
-  text world view (raw text stays one keypress away — both panels are always visible).
+Reference notes (paths as of the Phase 1.5 refactor — see Done 2026-09-05):
+- The renderer is `src/renderer/src/`: `App.tsx` (thin shell) + `components/` (WorldMap,
+  AgentFocus, Markdown, Composer, AgentList, RawLog, EncounterDialog — each with a co-located
+  `*.module.css`) + `hooks/` (use-world, use-composer, use-permission-queue) + `styles/global.css`
+  (tokens). The map (`components/WorldMap.tsx`) is a panel *beside* the text world view.
 - `npm run spike -- --cwd <repo> --class <Class> --prompt "…"` exercises the whole pipe
   headlessly (no Electron, no map) and prints world state per event — best for debugging the
   reducer. It now `stop()`s itself on the first `agent.turn_finished` (agents no longer
   self-exit after one turn); it does not exercise follow-up.
 - `npm run dev` also serves the renderer at `localhost:5173`; it survives a missing preload
   bridge (empty world, no crash), so the map is eyeballable in a plain browser.
-- `src/core/text.ts` holds the shared pure text helpers: `bubbleLine()` (markdown-aware
-  one-liner for the bubble), `toolTarget()` (short "what it touched" label), `toolKind()`
-  (read/write/other classification for the journal's border colour), and
-  `summarizeToolOutput()` (duck-types the Agent SDK's per-tool `tool_use_result` into the
-  journal's `+N / -M` / line / match summaries — see Gotchas for the SDK quirks it works
-  around). The raw-log panel deliberately does *not* use `bubbleLine` — it has its own literal
-  `firstLine` so the log stays faithful.
+- `src/core/text/` holds the shared pure text helpers, one concern per file: `bubble-line.ts`
+  (`bubbleLine()`, markdown-aware one-liner), `tool-labels.ts` (`toolTarget()`, `toolKind()`),
+  `summarize-tool-output.ts` (`summarizeToolOutput()` — duck-types the SDK's per-tool
+  `tool_use_result` into the journal's `+N / -M` / line / match summaries; see Gotchas for the
+  SDK quirks), `agent-color.ts` (`agentHue()` / `agentColor()`). The raw-log panel
+  (`components/RawLog.tsx`) deliberately does *not* use `bubbleLine` — its own literal
+  `firstLine` keeps the log faithful.
+- Agent classes: `src/core/agent-class/` — one `AgentClassPolicy` per class file
+  (`scout.ts` … `keeper.ts`), a shared `bash-guard.ts` (the default-deny Bash allow-list), and
+  `registry.ts` exposing `knownClasses` / `toolsForClass` / `bashCommandAllowed`.
+- Main: `src/main/agent-supervisor.ts` (`AgentSupervisor` owns the agent Map + pending asks;
+  Electron injected via `SupervisorHooks`) + `spawn-id.ts` (pure `slug` / `normalizeCwd`,
+  unit-tested). `index.ts` is just window + IPC wiring.
 - To inspect what the SDK's `tool_use_result` actually looks like for a given tool (its `.d.ts`
   comments alone aren't reliable — see Gotchas), write a throwaway `scripts/_dump-<x>.mjs` that
   calls `query()` directly with `canUseTool: async (_n, i) => ({ behavior: "allow",
@@ -66,6 +74,30 @@ Reference notes:
 
 ## Done
 
+- **2026-09-05** — **Phase 1.5 — coding standards + refactor.** Branch
+  `phase-1.5-coding-standards`, 9 commits, one reviewable slice each, `npm run check` +
+  `npm run build` green throughout, 129 tests (was 120), a real-`claude` spike run verifying the
+  pipeline end-to-end, and full live-in-Chrome verification of the renderer (map, focus panel,
+  encounter dialog, composer follow-up, raw-log filter) via the stub. **Not yet merged to
+  `main`.** What landed:
+  - **Tooling** — Prettier (printWidth 100) + flat-config ESLint
+    (`typescript-eslint` recommended-type-checked + stylistic, `eslint-plugin-react-hooks`,
+    architectural import-boundary rules as `no-restricted-imports`, `eslint-config-prettier`).
+    `npm run check` = typecheck + lint (`--max-warnings 0`) + format:check + test.
+  - **`docs/STANDARDS.md`** — the code-conventions doc (architecture boundaries, the six
+    sanctioned design patterns, file org, TypeScript, naming, React, purity, error handling,
+    comment/JSDoc format, testing, tooling). Referenced from `CLAUDE.md`.
+  - **Structure** — tests → `__tests__/`; `core/text.ts` → `core/text/` (4 modules);
+    `core/classes.ts` → `core/agent-class/` (`AgentClassPolicy` per class + shared
+    `bash-guard.ts` + `registry.ts`); `main/index.ts` → `AgentSupervisor` class + pure
+    `spawn-id.ts`; renderer → `App.tsx` shell (75 lines, was 306) + `components/` + `hooks/`;
+    CSS Modules per component + `styles/global.css` tokens (was one 594-line `index.css`).
+  - **Types** — `core/` types deeply `readonly` (the compiler now enforces "the reducer never
+    mutates"); explicit return types on every non-trivial function; JSDoc `@param`/`@returns`
+    on exports.
+  - Deviations from the plan, both in STANDARDS.md: Prettier printWidth **100** not 80 (the
+    source was already ~100); ESLint base is **recommended**-type-checked not strict (strict
+    flagged 220 mostly-stylistic issues). A few rules tuned — see `eslint.config.js` comments.
 - **2026-09-05** — **Phase 2 Slice 1: multi-agent map legibility** — `WorldMap.tsx` now tiles
   each room's interior into one non-overlapping cell per agent (`tileRoom()`: columns sized from
   room width, rows capped so each keeps ~50px vertical; past the cap, columns narrow instead of

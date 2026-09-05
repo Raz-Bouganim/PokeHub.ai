@@ -99,10 +99,10 @@ export default tseslint.config(
         "error",
         { allowNumber: true, allowBoolean: true },
       ],
-      // Global default is "warn" during the Phase 1.5 refactor; promoted to
-      // "error" per directory as each slice brings it to spec (see below).
+      // Explicit return type on every function that isn't a trivial expression
+      // or a contextually-typed callback (STANDARDS.md §4).
       "@typescript-eslint/explicit-function-return-type": [
-        "warn",
+        "error",
         { allowExpressions: true, allowTypedFunctionExpressions: true },
       ],
       // An empty arrow is a deliberate noop here (`.catch(() => {})` to swallow,
@@ -116,27 +116,9 @@ export default tseslint.config(
   {
     files: ["src/renderer/**/*.{ts,tsx}"],
     plugins: { "react-hooks": reactHooks },
-    rules: {
-      ...reactHooks.configs["recommended-latest"].rules,
-      // The Pixi map writes refs during render on purpose (it needs the latest
-      // world inside an async init callback). Flagged here as a warning until
-      // the renderer refactor (Phase 1.5 Slice 7) moves it into an effect.
-      "react-hooks/refs": "warn",
-    },
+    rules: reactHooks.configs["recommended-latest"].rules,
   },
   ...boundaryConfigs,
-  {
-    // Directories brought fully to STANDARDS.md §4 — explicit return types on
-    // every export are now enforced, not just warned. Extended per slice.
-    files: ["src/core/**/*.ts"],
-    ignores: ["src/core/**/__tests__/**"],
-    rules: {
-      "@typescript-eslint/explicit-function-return-type": [
-        "error",
-        { allowExpressions: true, allowTypedFunctionExpressions: true },
-      ],
-    },
-  },
   {
     files: ["**/__tests__/**", "**/*.test.{ts,tsx}"],
     rules: {

@@ -27,7 +27,7 @@ export function useWorld(): { world: WorldState; log: PokeHubEvent[] } {
     let ready = false;
     let buffer: PokeHubEvent[] = [];
 
-    const feed = (event: PokeHubEvent) => {
+    const feed = (event: PokeHubEvent): void => {
       const next = reduce(worldRef.current, event);
       if (next === worldRef.current) return; // de-duped by the reducer
       worldRef.current = next;

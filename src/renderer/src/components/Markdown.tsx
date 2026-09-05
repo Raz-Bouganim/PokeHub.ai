@@ -22,7 +22,7 @@ function parseBlocks(src: string): ReactNode[] {
   const out: ReactNode[] = [];
   let i = 0;
   let k = 0;
-  const key = () => `b${k++}`;
+  const key = (): string => `b${k++}`;
 
   const isBlockStart = (s: string): boolean =>
     s.startsWith("```") ||

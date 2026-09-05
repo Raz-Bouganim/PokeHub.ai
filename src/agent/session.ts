@@ -88,7 +88,7 @@ export function spawnAgent(opts: SpawnAgentOptions): AgentHandle {
     abort.abort();
   });
 
-  const emit = (draft: Parameters<typeof log.append>[0]) => {
+  const emit = (draft: Parameters<typeof log.append>[0]): PokeHubEvent => {
     const event = log.append(draft);
     if (event.kind === "agent.session_started") sessionId = event.sessionId;
     else if (event.kind === "agent.prompt") lifecycle = "running";

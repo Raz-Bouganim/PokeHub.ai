@@ -32,11 +32,8 @@ after the spike.
 - All art original or CC0. No Nintendo assets, names or fonts.
 
 ## Current phase
-**Phase 1.5 — Coding standards + refactor.** In progress: `docs/STANDARDS.md` is landed;
-the codebase is being brought to it one reviewable slice at a time (see `docs/PROGRESS.md`).
-Phase 2 work is paused until this closes.
-
-**Phase 2 — Parallel** (next). Phase 1 (Legibility) is done and verified. Then: N concurrent
+**Phase 2 — Parallel.** Phase 1 (Legibility) and Phase 1.5 (coding-standards refactor, on
+branch `phase-1.5-coding-standards` — merge before starting) are done. Now: N concurrent
 agents, subagent tethering (nesting made visible), town overview (the "am I done?" zoom), and a
 visible rate-limit budget. This is the core bet — parallel state at a glance beats N
 scrollbacks. Real art / UI polish is still Phase 3, not now.

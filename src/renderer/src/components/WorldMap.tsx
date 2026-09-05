@@ -262,16 +262,22 @@ export function WorldMap({
   const layerRef = useRef<Container | null>(null);
   const spritesRef = useRef<Map<string, Sprite>>(new Map());
   const [error, setError] = useState<string | null>(null);
-  // Kept current by the render effect so the async init below draws the latest
-  // world, not the one captured at mount — events can stream in during init().
+  // The async Pixi `init()` callback below draws whatever these refs hold when
+  // it finally resolves — not the props captured at mount, since events stream
+  // in during init. `selectRef` is a stable indirection so the redraw effect
+  // doesn't need `onSelect` as a dependency.
   const worldRef = useRef(world);
-  worldRef.current = world;
   const selectedIdRef = useRef(selectedId);
-  selectedIdRef.current = selectedId;
-  // Stable indirection so the redraw effect doesn't need `onSelect` as a dep.
   const selectRef = useRef<(id: string) => void>(() => {});
-  selectRef.current = (id) => onSelect?.(id);
-  const select = (id: string) => selectRef.current(id);
+  const select = (id: string): void => selectRef.current(id);
+
+  // Sync the refs after every render. Declared before the draw effects so it
+  // flushes first — they then see current values.
+  useEffect(() => {
+    worldRef.current = world;
+    selectedIdRef.current = selectedId;
+    selectRef.current = (id) => onSelect?.(id);
+  });
 
   // Create the Pixi app once. init() is async, so a fast unmount (React
   // StrictMode double-invoke, HMR) can fire cleanup before it resolves —
