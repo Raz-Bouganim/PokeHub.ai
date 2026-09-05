@@ -10,6 +10,7 @@ import { type CSSProperties } from "react";
 import { agentColor } from "../../../core/text/agent-color.ts";
 import type { AgentState } from "../../../core/world.ts";
 import { cx } from "../cx.ts";
+import { AgentDot } from "./AgentDot.tsx";
 import styles from "./AgentList.module.css";
 
 interface AgentListProps {
@@ -37,7 +38,8 @@ export function AgentList({
           onClick={() => onSelect(a.id)}
           style={{ "--agent-color": agentColor(a.id) } as CSSProperties}
         >
-          <strong className={styles.name}>{a.name}</strong> <span>({a.agentClass})</span>
+          <AgentDot agentId={a.id} /> <strong className={styles.name}>{a.name}</strong>{" "}
+          <span>({a.agentClass})</span>
           {" — "}
           <span className="room">{a.location}</span>
           {" · "}

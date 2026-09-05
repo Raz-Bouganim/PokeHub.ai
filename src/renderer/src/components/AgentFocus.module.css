@@ -4,6 +4,8 @@
   display: flex;
   flex-direction: column;
   border-color: var(--border-focus);
+  /* ties the whole detail view to the agent's identity colour */
+  border-left: 3px solid var(--agent-color, var(--border-focus));
 }
 
 .focusHead {

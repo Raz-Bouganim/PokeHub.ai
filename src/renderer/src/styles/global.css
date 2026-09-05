@@ -110,7 +110,21 @@ select:disabled {
 }
 
 /* Agent status label colour — the string is `status-${agent.status}`, built in
-   two components, so these stay global utilities. */
+   two components, so these stay global utilities. Matched to the map's sprite
+   tints (WorldMap `STATUS_TINT`) so a status reads the same in text and on the
+   map. */
+.status-spawning {
+  color: var(--fg-dim);
+}
+
+.status-thinking {
+  color: var(--status-active);
+}
+
+.status-working {
+  color: var(--status-ok);
+}
+
 .status-blocked {
   color: var(--status-warn);
 }
@@ -121,4 +135,8 @@ select:disabled {
 
 .status-idle {
   color: var(--status-idle);
+}
+
+.status-exited {
+  color: var(--fg-muted);
 }

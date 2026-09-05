@@ -14,6 +14,7 @@ import type { PokeHubEvent } from "../../../core/events.ts";
 import { agentColor } from "../../../core/text/agent-color.ts";
 import type { AgentState } from "../../../core/world.ts";
 import { cx } from "../cx.ts";
+import { AgentDot } from "./AgentDot.tsx";
 import styles from "./RawLog.module.css";
 
 interface RawLogProps {
@@ -54,6 +55,7 @@ export function RawLog({ log, agents, selectedId, selectedName }: RawLogProps): 
           key={`${e.agentId}-${e.seq}`}
           style={{ "--agent-color": agentColor(e.agentId) } as CSSProperties}
         >
+          <AgentDot agentId={e.agentId} />{" "}
           <span className={styles.agent}>{agents[e.agentId]?.name ?? e.agentId.slice(0, 6)}</span>{" "}
           <span className={styles.kind}>
             {String(e.seq).padStart(3, "0")} {e.kind}

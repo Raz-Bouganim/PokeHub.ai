@@ -10,9 +10,11 @@
  * Not unit-tested — React render; verified live via the stub (PROGRESS.md).
  */
 
-import { useState } from "react";
+import { type CSSProperties, useState } from "react";
+import { agentColor } from "../../../core/text/agent-color.ts";
 import type { AgentState, JournalEntry, RecentTool } from "../../../core/world.ts";
 import { cx } from "../cx.ts";
+import { AgentDot } from "./AgentDot.tsx";
 import styles from "./AgentFocus.module.css";
 import { Markdown } from "./Markdown.tsx";
 
@@ -26,10 +28,13 @@ export function AgentFocus({ agent, onClose }: AgentFocusProps): JSX.Element {
   const [tab, setTab] = useState<"conversation" | "journal">("conversation");
 
   return (
-    <div className={cx("panel", styles.focusPanel)}>
+    <div
+      className={cx("panel", styles.focusPanel)}
+      style={{ "--agent-color": agentColor(agent.id) } as CSSProperties}
+    >
       <div className={styles.focusHead}>
         <h2>
-          {agent.name} · {agent.agentClass} ·{" "}
+          <AgentDot agentId={agent.id} /> {agent.name} · {agent.agentClass} ·{" "}
           <span className={`status-${agent.status}`}>{agent.status}</span>
         </h2>
         <button onClick={onClose} title="close the focus view">

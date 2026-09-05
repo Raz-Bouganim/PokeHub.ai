@@ -1,0 +1,12 @@
+/* A solid identity swatch — the agent's stable colour as a shape you can
+   actually read, unlike the tinted name text. A rounded square so it doesn't
+   read as a status sprite (those are circles on the map). */
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--agent-color, var(--fg-muted));
+  vertical-align: baseline;
+  flex: none;
+}

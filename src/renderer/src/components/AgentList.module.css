@@ -13,6 +13,8 @@
 
 .agent.selected {
   border-color: var(--accent);
+  /* keep the identity stripe — `border-color` above would blank it */
+  border-left-color: var(--agent-color, var(--accent));
   background: var(--selected-bg);
 }
 
