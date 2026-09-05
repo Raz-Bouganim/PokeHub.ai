@@ -8,20 +8,20 @@ The spec is `VISION.md`. The always-on rules are `CLAUDE.md`.
 **Phase 1 — Legibility.** Goal for the phase: full room set for one project, encounter-style
 permission dialog, journal with diffs, raw-stream toggle — and it must genuinely beat a
 terminal for a *single* agent. Follow-up interaction + full-text capture + agent-focus view +
-per-agent raw-log filter/colour all landed and were verified live.
+per-agent raw-log filter/colour + journal with diffs all landed and were verified live.
 
-**Start here — journal with diffs.** Files *read* vs *modified* visually distinct (VISION
-"Legibility features"). The seed is already in place:
-- `AgentState.recentTools` (`RecentTool[]`, cap 8, in `src/core/world.ts`) carries `tool` +
-  `target` + `ok` per call, rendered today as the "recent tools" trail in `AgentFocus.tsx`.
-- The journal is the **unbounded, grouped-by-turn** version of that trail, with `+N / -M` pulled
-  from `tool.finished.summary` (already populated for edits — check `translate.ts` for exactly
-  which tools set it). Read vs. write should be visually distinct (colour or icon), not just
-  labelled — that's the whole point of the feature per VISION.
-- Natural home is a new panel or a tab inside `AgentFocus.tsx`, scoped to the focused agent (it
-  already reads `agent.transcript`/`agent.recentTools` the same way). Reuse the `agentColor()`
-  helper in `App.tsx` (wraps `core/text.ts`'s `agentHue`) if the journal ever shows more than
-  one agent at once — not needed for a single-agent panel.
+**Start here — cwd field robustness.** Confirmed twice during this session's manual
+verification pass: the composer's folder input (`App.tsx`'s `cwd` state) is passed straight
+through — `App.tsx` → `main/index.ts`'s IPC handler → `session.ts` → `query({ options: { cwd
+} })` — with **zero normalization**. A leading `~/` (Node doesn't expand it) or a stray
+leading/trailing space (easy to introduce via copy-paste) resolves to a nonexistent directory;
+the child `claude` process then fails to spawn there, and the SDK surfaces a generic,
+misleading `"Claude Code native binary ... exists but failed to launch ... doesn't match this
+system's libc"` error that has nothing to do with the real cause (see Gotchas). Fix: `.trim()`
+the field and expand a leading `~`/`~/` to `os.homedir()` before it reaches `query()` — cheapest
+done in `main/index.ts`'s spawn handler (keeps `session.ts` and the renderer untouched). Small,
+well-scoped, deferred only because the user chose to postpone it mid-verification, not because
+it's unclear how to fix.
 
 Then, in rough priority order (all Phase 1):
 - Full room-set polish, encounter-dialog polish.
@@ -39,15 +39,40 @@ Reference notes:
 - `npm run dev` also serves the renderer at `localhost:5173`; it survives a missing preload
   bridge (empty world, no crash), so the map is eyeballable in a plain browser.
 - `src/core/text.ts` holds the shared pure text helpers: `bubbleLine()` (markdown-aware
-  one-liner for the bubble) and `toolTarget()` (short "what it touched" label). The raw-log
-  panel deliberately does *not* use `bubbleLine` — it has its own literal `firstLine` so the
-  log stays faithful.
+  one-liner for the bubble), `toolTarget()` (short "what it touched" label), `toolKind()`
+  (read/write/other classification for the journal's border colour), and
+  `summarizeToolOutput()` (duck-types the Agent SDK's per-tool `tool_use_result` into the
+  journal's `+N / -M` / line / match summaries — see Gotchas for the SDK quirks it works
+  around). The raw-log panel deliberately does *not* use `bubbleLine` — it has its own literal
+  `firstLine` so the log stays faithful.
+- To inspect what the SDK's `tool_use_result` actually looks like for a given tool (its `.d.ts`
+  comments alone aren't reliable — see Gotchas), write a throwaway `scripts/_dump-<x>.mjs` that
+  calls `query()` directly with `canUseTool: async (_n, i) => ({ behavior: "allow",
+  updatedInput: i })` and logs `msg.tool_use_result` on `type: "user"` messages. Faster than
+  guessing, and how two live miscounts were caught this session. Delete the script when done —
+  it's a debugging aid, not part of the app.
 - Restart `npm run dev` fully between runs — StrictMode remount + Pixi async init is fragile.
 - Renderer main chunk is ~1.15 MB now that Pixi is bundled (past Vite's 500 kB warning).
   Code-split before Phase 4 packaging; ignore until then.
 
 ## Done
 
+- **2026-09-05** — **Journal with diffs** (Phase 1, the prior session's "start here"). New
+  `JournalEntry` (`AgentState.journal`, uncapped) extends `Pick<RecentTool, "toolCallId" |
+  "tool" | "target" | "ok">` and adds `kind` (read/write/other), `summary`, and `turn`
+  (`promptCount` at call time). New `toolKind()` and `summarizeToolOutput()` in `core/text.ts`;
+  the latter duck-types the SDK's `tool_use_result` (`structuredPatch`+`gitDiff` for
+  Edit/Write, match/file counts for Grep/Glob, `file.content` for Read) into the `+N / -M` /
+  line / match summary, wired into `translate.ts`'s `tool.finished` draft. New `AgentFocus.tsx`
+  tab (conversation / journal) rendering turn-grouped entries with a kind-coloured left border
+  plus a shared ok/fail/in-flight mark. Verified live via `npm run dev` across four manual
+  scenarios (grouping + diffs, refusal handling, Grep/Read line counts, abandoned-entry-on-exit)
+  — two of which surfaced real SDK-shape bugs mid-verification (see Gotchas). A `/code-review`
+  fork found 9 issues on the diff; fixed the 5 real ones (refusal recorded as a failure in the
+  journal/`recentTools` trail; a brand-new file's Write always summarizing "+0 / -0"; a message
+  batching >1 `tool_result` able to misattribute its summary; a journal entry stuck "in flight"
+  forever once its owning agent exits; duplicated mark/class helpers) and consciously skipped 3
+  (see Decisions). 120 tests (was 99).
 - **2026-09-05** — **Per-agent raw-log filter + stable agent colour** (Phase 1, the prior
   session's "start here"). New `agentHue(agentId)` in `src/core/text.ts` (pure hash → hue
   0-359, tested). `App.tsx`'s raw-log panel gained an "only `<name>`" checkbox that appears once
@@ -118,6 +143,28 @@ Reference notes:
 
 ## Decisions
 
+- **2026-09-05** — An abandoned journal entry (owning agent exited before its `tool.finished`
+  arrived) is surfaced **at render time** (`AgentFocus.tsx` checks `agent.status === "exited"`),
+  not by mutating the stored `ok`. Keeps `JournalEntry.ok: boolean | null`'s meaning intact
+  ("outcome unknown") — "will never be known" is a fact about the agent's lifecycle, not a
+  fourth value the tool-call outcome needs to encode.
+- **2026-09-05** — `toolKind()` (`core/text.ts`) stays a **separate lookup table** from
+  `rooms.ts`'s `TOOL_ROOM`, even though they overlap on Read/Grep/Glob/Write/Edit. A
+  code-review finding suggested deriving one from the other; declined — they encode different
+  axes (journal read/write semantics vs. spatial room assignment), and merging them would
+  couple two concerns that happen to agree today but have no reason to stay identical forever
+  (e.g. `WebFetch`/`WebSearch` are journal-"read" with no room at all, since the Gate room is
+  deferred).
+- **2026-09-05** — The journal's `alreadyJournaled`/`tool.finished` lookups stay a plain
+  `.some()`/`.map()` scan over the (uncapped) array, not an id-indexed `Set`/`Map` alongside it.
+  A code-review finding flagged the O(n) cost as O(n²) over a very long session; accepted for
+  Phase 1 — real session sizes are dozens of calls, not thousands, and an extra index is a
+  second piece of state to keep in sync for a problem that doesn't exist yet.
+- **2026-09-05** — Tool-output summaries **recompute from the SDK's own returned data**
+  (`content`, `structuredPatch`) rather than trusting its precomputed counts (`numLines`,
+  `totalLines`) at face value. Forced by two independent live bugs this session (Grep's
+  `numFiles`, Read's `numLines` — see Gotchas): a field named `numLines` is not proof it counts
+  lines correctly, so anywhere the raw content is also available, count it ourselves.
 - **2026-09-05** — Per-agent colour is a **pure hash of `agentId` → hue**, not a registry/palette
   assigned at spawn time — no state to keep in sync, and it survives a reload since it's derived
   from the id alone. Rendered as `hsl(h, 65%, 65%)` everywhere (CSS and Pixi both parse it), so
@@ -210,9 +257,33 @@ _Things learned the hard way. One line each — what broke, and what fixed it._
   not create image from display" (no screen-recording permission for the terminal) — so
   `npm run dev` + tsc + vitest is as far as automated verification goes here; UI changes need
   the user to eyeball the running app themselves before calling a UI task done.
-- **Background agents `git add` the whole tree.** Seen twice now (a scaffold-review fork, then a
-  verification subagent) — despite explicit "don't stage" instructions. Not a commit. `git reset`
-  (no `--hard`) unstages cleanly. Assume any subagent may stage; check `git status` after they run.
+- **Background agents `git add` the whole tree.** Seen three times now (a scaffold-review fork,
+  a verification subagent, then a `/code-review` fork) — despite explicit "don't stage"
+  instructions. Not a commit. `git reset` (no `--hard`) unstages cleanly. Assume any subagent
+  may stage; check `git status` after they run.
+- **The composer's `cwd` field does zero normalization** — no `.trim()`, no `~` expansion.
+  Confirmed twice live this session: a literal `~/Desktop/...` and a stray leading space (from
+  copy-paste) each resolved to a nonexistent directory, and the failure surfaced as the SDK's
+  generic `"Claude Code native binary ... exists but failed to launch ... doesn't match this
+  system's libc"` message — which is actually just "the cwd doesn't exist," dressed up as a
+  platform/libc problem. If that error ever shows up again, check the literal `cwd` string
+  (including whitespace) before suspecting the binary. Fix queued in "Next up," not yet applied.
+- **Grep's default `"content"` output mode leaves `numFiles` at 0 even with real matches** —
+  confirmed against a live SDK run (a query that found 6 real matches came back with
+  `numFiles: 0, filenames: []`). Its match count instead lives in the top-level `numLines`
+  field (lines of matching content returned). `numMatches` only appears in `"count"` mode.
+  `summarizeToolOutput()` checks `numMatches` → `numLines` → `numFiles`, in that order.
+- **Write's `type: "create"` output always ships an empty `structuredPatch`** (there's nothing
+  to diff a new file against) — confirmed live: a real 2-line file creation came back
+  `structuredPatch: []`, which would read as `"+0 / -0"` if checked first. Fix: check
+  `type === "create"` before `structuredPatch`, and count the new file's own `content` lines.
+- **Read's `FileReadOutput.numLines`/`totalLines` overcounts by one on a file with a trailing
+  newline** (the normal shape of a real file) — confirmed live: a genuinely 3-line file
+  (`"a\nb\nc\n"`) came back reporting `numLines: 4`, i.e. the exact same "naive
+  `content.split("\n")` counts the empty string after the final `\n` as a line" bug fixed for
+  Write's create case above, except baked into a field the SDK reports directly rather than
+  something we compute. Fix: ignore `numLines`/`totalLines`, recompute from `file.content` with
+  the same trailing-newline-safe counter used for Write.
 - **Electron binary never downloaded during `npm install`** (sandboxed network): `extract-zip`
   in `install.js` also silently no-ops on the 95 MB zip. Fix: `ditto -x -k <cached zip>
   node_modules/electron/dist/` then `printf 'Electron.app/Contents/MacOS/Electron' > path.txt`.

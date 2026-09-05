@@ -32,9 +32,9 @@ after the spike.
 
 ## Current phase
 **Phase 1 — Legibility.** Follow-up interaction + full assistant-text capture + agent-focus
-view have landed. Remaining: per-agent raw-stream filter, journal with diffs, full room set
-for one project. Bar: it beats a terminal for a *single* agent. Real art / UI polish is
-Phase 3, not now.
+view + per-agent raw-stream filter + journal with diffs have landed. Remaining: full room set
+for one project, encounter-dialog polish. Bar: it beats a terminal for a *single* agent. Real
+art / UI polish is Phase 3, not now.
 
 ## Session hygiene
 - `/kickoff` at the start of a session, `/wrap-up` at the end.
