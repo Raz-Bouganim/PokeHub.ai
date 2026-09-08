@@ -1,0 +1,15 @@
+.panel {
+  flex: none;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.back {
+  padding: 2px 8px;
+  font-size: 11px;
+}

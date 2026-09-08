@@ -21,6 +21,7 @@ import type { PokeHubEvent } from "../core/events.ts";
 import { bashCommandAllowed, toolsForClass } from "../core/agent-class/registry.ts";
 import type { PermissionAsk, PermissionDecision } from "../shared/permissions.ts";
 import { EventLog } from "./event-log.ts";
+import { toolCallOwners } from "./tool-call-owners.ts";
 import { translate } from "./translate.ts";
 
 export type { PermissionAsk, PermissionDecision };
@@ -88,12 +89,17 @@ export function spawnAgent(opts: SpawnAgentOptions): AgentHandle {
     abort.abort();
   });
 
+  // Attributes a `canUseTool` ask to the sprite that actually made the call —
+  // the root, or a subagent (the SDK callback only gives us the tool-use id).
+  const owners = toolCallOwners(opts.agentId, opts.name);
+
   const emit = (draft: Parameters<typeof log.append>[0]): PokeHubEvent => {
     const event = log.append(draft);
     if (event.kind === "agent.session_started") sessionId = event.sessionId;
     else if (event.kind === "agent.prompt") lifecycle = "running";
     else if (event.kind === "agent.turn_finished") lifecycle = "idle";
     else if (event.kind === "agent.exited") lifecycle = "exited";
+    owners.track(event);
     opts.onEvent?.(event);
     return event;
   };
@@ -118,20 +124,22 @@ export function spawnAgent(opts: SpawnAgentOptions): AgentHandle {
   const classTools = toolsForClass(opts.agentClass);
 
   const canUseTool: CanUseTool = async (toolName, input, { toolUseID, title, suggestions }) => {
+    const asker = owners.resolve(toolUseID);
+
     emit({
       kind: "permission.requested",
       source: "agent",
-      agentId: opts.agentId,
+      agentId: asker.id,
       sessionId,
       toolCallId: toolUseID,
       tool: toolName,
       input,
     });
 
-    // Class enforcement the tool allow-list can't express: Bash is one tool
-    // spanning many capabilities, so Runner ("no writes") and Keeper ("git
-    // only") are gated here, at call time. The user is not asked — the class
-    // already decided.
+    // Bash is one tool spanning many capabilities, so Runner ("no writes") and
+    // Keeper ("git only") are gated here, not via the tool allow-list. The user
+    // isn't asked — the class already decided. A subagent runs under the
+    // parent's class, so this applies to its Bash calls too.
     if (toolName === "Bash") {
       const command = typeof input["command"] === "string" ? input["command"] : "";
       const verdict = bashCommandAllowed(opts.agentClass, command);
@@ -139,7 +147,7 @@ export function spawnAgent(opts: SpawnAgentOptions): AgentHandle {
         emit({
           kind: "permission.resolved",
           source: "system",
-          agentId: opts.agentId,
+          agentId: asker.id,
           sessionId,
           toolCallId: toolUseID,
           decision: "refuse",
@@ -149,8 +157,8 @@ export function spawnAgent(opts: SpawnAgentOptions): AgentHandle {
     }
 
     const ask: PermissionAsk = {
-      agentId: opts.agentId,
-      agentName: opts.name,
+      agentId: asker.id,
+      agentName: asker.name,
       toolCallId: toolUseID,
       tool: toolName,
       input,
@@ -163,7 +171,7 @@ export function spawnAgent(opts: SpawnAgentOptions): AgentHandle {
     emit({
       kind: "permission.resolved",
       source: "user",
-      agentId: opts.agentId,
+      agentId: asker.id,
       sessionId,
       toolCallId: toolUseID,
       decision,

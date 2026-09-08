@@ -101,10 +101,15 @@ determinism). One injected instance in `main/` is allowed.
   ```
   renderer/src/
     main.tsx, App.tsx        entry + top-level shell
-    components/              one .tsx + its .module.css each
+    components/              one .tsx + its .module.css each; a component with
+                             real internal complexity may own a subfolder of
+                             plain-.ts render helpers (see components/world-map/)
     hooks/                   use-*.ts
     styles/                  global.css, tokens
   ```
+- **Prefer many small, exact files over one long one.** When a file does two
+  things, split it — the import list then documents the pieces. "Contrived
+  fragments" means a split with no seam, not a small file.
 
 ---
 
@@ -160,8 +165,14 @@ determinism). One injected instance in `main/` is allowed.
     custom properties**: `style={{ "--hue": hue }}`, consumed in the `.module.css`.
   - `styles/global.css` holds resets, the color palette / tokens, and truly
     global layout.
-- One component per file. Split a component when it exceeds ~80 lines *or* the
-  moment a piece of it is reused.
+- One component per file. Split when it exceeds ~80 lines *or* the moment a
+  piece of it is reused.
+- **Reuse before re-rendering markup.** Reach for an existing primitive
+  (`AgentDot`, `StatusDot`, `cx`) before writing a `<span>`/`<div>`. If two
+  places render the same shape, it is a component — a named `<BuildingCard>`
+  beats a fourth nested `<div>` that another file also has.
+- **Keep the tree shallow.** A wrapper element that exists only to group for CSS
+  usually means the group wants to be its own component.
 - Props: a named `interface FooProps`. No inline prop object types.
 
 ---
@@ -200,30 +211,25 @@ determinism). One injected instance in `main/` is allowed.
 
 ## 9. Comments & docs
 
-- **Every exported function / hook gets a JSDoc block:**
-  ```ts
-  /**
-   * One sentence on what it does and why it exists.
-   *
-   * @param events - the log to fold, oldest first
-   * @param from   - the world state to fold onto
-   * @returns the resulting world state (a new object)
-   */
-  ```
-  Skip `@param`/`@returns` only when the function takes nothing and returns
-  nothing meaningful.
-- **Every module gets a header block** stating its single responsibility and any
-  invariant it upholds or relies on (the reducer's purity, the per-agent
-  `seq` de-dup, "this file is the only place that imports Electron"). A render
-  file that isn't unit-tested says so and points at how it's verified.
-- **Inline `//` comments explain *why*, never *what*.** A comment that
-  paraphrases the code it sits on should be deleted and the code renamed
-  instead. Good inline comments: a non-obvious constraint, a workaround for a
-  specific upstream quirk (with a pointer), an invariant that isn't visible
-  locally.
-- Keep them current. A stale comment is worse than none.
-- Session history, "added for X", and TODO-narrative belong in `PROGRESS.md` and
-  commit messages, not in the code.
+Readable code first. A well-named function, type, or file beats a paragraph
+explaining a vague one — rename or split before reaching for a comment. Prose
+that just narrates the code is noise; cut it.
+
+- **Comment the non-obvious, and only that.** A constraint that isn't visible
+  locally, a workaround for an upstream quirk (with a pointer), an invariant the
+  types can't express, a "why this and not the obvious thing". One or two lines.
+- **JSDoc only where the signature doesn't already say it** — a non-trivial
+  return shape, units, ordering guarantees, a caveat. A single sentence is
+  enough. Don't ritually document `agentList(world)` or a hook that returns
+  exactly what its name promises. `@param`/`@returns` only when they add
+  something the types don't.
+- **Module header: one line, when the filename and exports don't already tell
+  you.** Add a real invariant if the file carries one ("only place that imports
+  Electron", the reducer's purity). A render file not under unit test says so in
+  a line.
+- Keep comments current — a stale one is worse than none.
+- Session history and "added for X" belong in `PROGRESS.md` and commit messages,
+  never the code.
 
 ---
 
@@ -234,8 +240,8 @@ determinism). One injected instance in `main/` is allowed.
   directly against fixtures. Recorded real SDK messages are the fixtures for
   translation; hand-built event arrays for the reducer.
 - **Pixi / React render code is not unit-tested.** It's verified live in Chrome
-  via the throwaway stub (see `PROGRESS.md` Gotchas). Each render file's header
-  says this.
+  via the throwaway stub (see `PROGRESS.md` Gotchas). A render file says so in a
+  one-line header.
 - **Never mock the reducer or the event types.** Tests fold real events through
   the real `reduce()`. A mock that drifts from the reducer is a test that lies.
 - Beyond that, coverage is a judgment call per change — write the test when it

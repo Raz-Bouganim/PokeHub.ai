@@ -11,30 +11,35 @@ now the code-conventions authority; follow it for every change and keep `npm run
 (typecheck + lint `--max-warnings 0` + format:check + test) green before every commit.
 Housekeeping: the local `phase-1.5-coding-standards` branch is merged and can be deleted.
 
-Slice 2 (subagent tethering) done 2026-09-08 — 2a (data) + 2b (WorldMap render), committed on
-branch `phase-2-subagent-tethering` (not yet merged to `main`). See Done. Remaining Phase 2
-work, pick one and confirm scope with the user before building:
+Branch `phase-2-subagent-tethering` now carries Slice 2 (2a data + 2b render), both Slice 2
+loose ends, Slice 3 (town overview), and a readability/modularity refactor — all committed
+2026-09-09, **not yet merged to `main`**. `npm run check` (152 tests) + `npm run build` green.
 
-**Two loose ends from Slice 2, decide first:**
-1. **No agent class allows the `Task`/`Agent` tool** (`src/core/agent-class/*.ts` `tools`
-   lists) — the SDK `tools` cap is a hard allow-list, so a classed agent (Builder/Scout/…)
-   physically cannot dispatch a subagent; only an unclassed agent can. Tethering is fully built
-   but nothing triggers it for a real classed agent. Likely fix: add `Task` to Builder (and
-   maybe Scout/Reviewer). Needs a call — see "VISION.md needs updating".
-2. **A subagent's tool-permission prompt is attributed to the parent**, not the child —
-   `session.ts` `canUseTool` only knows `opts.agentId` (the root); the SDK gives no subagent
-   context on the callback. So the encounter dialog says "Boss wants to run `npm test`" when the
-   subagent asked, and the parent sprite goes `blocked` while the child's tool is pending. Its
-   own slice. `canUseTool`'s `{ toolUseID }` is the child's tool-use id but nothing yet maps it
-   back to a `sub-…` agent at ask time.
+**START HERE — Phase 2 Slice 4: visible rate-limit / budget gauge.** PP/Money in VISION's
+glance table (`Rate-limit budget left in window` → "make the budget visible *before* you spend
+it"). Plan:
+1. The SDK emits a `rate_limit_event` frame carrying `rate_limit_info.unifiedWindows.{five_hour,
+   seven_day}`, each with `utilization` (0-1) + `resetsAt`. `translate.ts` currently ignores it
+   — add a case. Confirm the exact shape first with a throwaway `scripts/_dump-*.mjs` (the
+   `.d.ts` isn't reliable — see Gotchas / the `tool_use_result` note).
+2. New event kind `rate_limit.updated` (source `"system"`), a `WorldState` field for the
+   latest reading (world-level, not per-agent — the budget is the account's), reducer case.
+   Selectors compute "% left" / "resets in Nm" taking `now` (time lives in selectors, not the
+   reducer).
+3. A gauge in the renderer — likely its own `components/` panel or a strip in `MapPanel`, red
+   under ~15% like the HP bar. Reuse tokens; keep it a real number, not decoration.
+4. Verify via the Chrome stub (push a `rate_limit.updated`, watch the gauge) and, if a real
+   `npm run spike` run surfaces the frame, against that.
 
-**Then, the remaining Phase 2 slices, in order:**
-- (3) **Town overview** as a new zoom level — every project a building, all agents as dots, the
-  "am I done?" zoom.
-- (4) **Visible rate-limit / budget gauge** — PP/Money in VISION's glance table. The
-  `rate_limit_event` SDK frame (`rate_limit_info.unifiedWindows.{five_hour,seven_day}` with
-  `utilization` + `resetsAt`) is the real source; `translate.ts` currently ignores it. Needs a
-  new event kind + reducer field + a gauge in the renderer.
+**Both Slice 2 loose ends — RESOLVED 2026-09-08 (see Done):** #1 Builder-only `Task`/`Agent`;
+#2 subagent-permission attribution via `agent/tool-call-owners.ts`. The `session.ts` wiring for
+#2 still wants a real `npm run spike` subagent run to confirm the asker resolves end-to-end
+(the renderer/reducer half is live-verified).
+
+**Slice 3 — town overview — DONE 2026-09-08.** `core/town.ts` `townBuildings()` groups agents
+by `cwd`; `hooks/use-map-zoom.ts` owns the town↔building zoom; `MapPanel` → `TownView` →
+`BuildingCard` → `StatusDot` (plain DOM); `WorldMap.tsx` split into `components/world-map/*`
+with a `focusedProject` filter. Single-project worlds skip the town (no regression).
 
 Then, in rough priority order:
 - **Encounter dialog is below VISION's "killer moment" bar** (found in the 2026-09-05 QA pass):
@@ -43,9 +48,9 @@ Then, in rough priority order:
   `components/EncounterDialog.tsx`. Its own small task — the mechanic's whole justification is
   the risk-surfacing.
 - **Map identity ring is thin / buried** (same QA pass): the per-agent accent ring in
-  `WorldMap.tsx` (1.5px, `r+2`) is drowned by the status ring (`r+4`) + selection ring (`r+7`),
-  and vanishes on `exited` agents (container alpha 0.4). Needs an art-direction call — defer to
-  Phase 3 unless it bites sooner.
+  `components/world-map/sprite.ts` (1.5px, `r+2`) is drowned by the status ring (`r+4`) +
+  selection ring (`r+7`), and vanishes on `exited` agents (container alpha 0.4). Needs an
+  art-direction call — defer to Phase 3 unless it bites sooner.
 - Swap the hand-rolled `Markdown.tsx` for `react-markdown` **only if** the transcript becomes
   central and the mini-renderer's gaps (nested lists, task lists) start to bite. Not now.
 - UI refactor / real art is **Phase 3**, not now — acknowledged and deferred on purpose.
@@ -56,13 +61,20 @@ Reference notes (paths as of the Phase 1.5 refactor — see Done 2026-09-05):
   typecheck + lint (`--max-warnings 0`) + format:check + test; run before every commit.
   `npm run lint:fix` / `npm run format` autofix. `eslint.config.js` carries the import-boundary
   table and a few tuned rules (comments explain each).
-- The renderer is `src/renderer/src/`: `App.tsx` (thin shell) + `components/` (WorldMap,
-  AgentFocus, Markdown, Composer, AgentList, RawLog, EncounterDialog, AgentDot — each with a
-  co-located `*.module.css`) + `hooks/` (use-world, use-composer, use-permission-queue) +
-  `styles/global.css` (tokens + shared `.panel`/`.room`/`.status-*`, imported **before** any
-  component module in `main.tsx` so modules can override). The map (`components/WorldMap.tsx`)
-  is a panel *beside* the text world view. `cx.ts` joins class names (CSS Module lookups are
-  `string | undefined`).
+- The renderer is `src/renderer/src/`: `App.tsx` (thin shell) + `components/` (MapPanel,
+  WorldMap + `world-map/` render helpers, TownView + BuildingCard + StatusDot, AgentFocus,
+  Markdown, Composer, AgentList, RawLog, EncounterDialog, AgentDot — each `.tsx` with a
+  co-located `*.module.css`) + `hooks/` (use-world, use-composer, use-permission-queue,
+  use-map-zoom) + `styles/global.css` (tokens + shared `.panel`/`.room`/`.status-*`, imported
+  **before** any component module in `main.tsx` so modules can override). `MapPanel` is the map
+  panel beside the text world view: `use-map-zoom.ts` picks the "town" zoom (`TownView`, plain
+  DOM) or the "building" zoom (`WorldMap`, Pixi — `focusedProject` filters to one project).
+  `cx.ts` joins class names (CSS Module lookups are `string | undefined`).
+- `WorldMap.tsx` is only the Pixi lifecycle; the drawing lives in `components/world-map/`:
+  `geometry.ts` (pure layout maths + room data), `sprite.ts` (one sprite), `rooms.ts`,
+  `render-agents.ts` (the layout loop + tethers).
+- Town projects are grouped by agent `cwd` in `core/town.ts` `townBuildings()` (pure, tested in
+  `core/__tests__/town.test.ts`). No fences/compounds yet — that's a later slice.
 - `npm run spike -- --cwd <repo> --class <Class> --prompt "…"` exercises the whole pipe
   headlessly (no Electron, no map) and prints world state per event — best for debugging the
   reducer. It now `stop()`s itself on the first `agent.turn_finished` (agents no longer
@@ -93,6 +105,49 @@ Reference notes (paths as of the Phase 1.5 refactor — see Done 2026-09-05):
   Code-split before Phase 4 packaging; ignore until then.
 
 ## Done
+
+- **2026-09-08** — **Phase 2: both Slice 2 loose ends + Slice 3 (town overview), then a
+  readability/modularity refactor of the whole session's changed files.** `npm run check`
+  (152 tests, was 141) + `npm run build` green, live-verified in Chrome via the stub.
+  Committed 2026-09-09 on branch `phase-2-subagent-tethering` (not merged).
+  - **Loose end #1 — subagent dispatch.** `builder.ts` `tools` includes `Task` + `Agent` (wire
+    name); no other class does. `registry.test.ts` asserts it. A Builder is already
+    unrestricted so it launders nothing; a restricted class + `Task` could route a write
+    through an un-gated subagent.
+  - **Loose end #2 — subagent permission attribution.** New `agent/tool-call-owners.ts`:
+    `toolCallOwners(rootId, rootName)` indexes `translate`'s own `tool.started` / `agent.spawned`
+    drafts as `session.ts` logs them and answers `resolve(toolUseId) → { id, name }`. Timing
+    holds — the assistant `tool_use` message is fully processed before the SDK invokes
+    `canUseTool` for it. `session.ts`'s `canUseTool` stamps the asker on
+    `permission.requested` / `permission.resolved` (user path + bash-guard refuse path) + the
+    `PermissionAsk`. `AgentSupervisor.PendingAsk` gained `sessionAgentId`; `handle.done.finally`
+    → `resolveAsksForSession` fails a subagent's orphaned asks closed. `tool-call-owners` is
+    unit-tested (4 tests); the `session.ts` wiring still wants a real spike run.
+  - **Slice 3 — town overview.** `core/town.ts`: `townBuildings(world)` groups `agentList` by
+    `cwd` (the only project signal), label = last path segment, tallies `needsAttention` /
+    `busy` / `done`. 6 tests in `core/__tests__/town.test.ts`. `hooks/use-map-zoom.ts` holds
+    only `focusedProject` and derives `view` + `focused`. DOM view (dashboard tier, not Pixi):
+    `TownView` → `BuildingCard` → `StatusDot` (a new reusable status-coloured dot;
+    `BuildingCard` is one card — head + dots + tally). `MapPanel` holds the breadcrumb
+    (`Town` / `Town / <label>` + `← town`) and toggles both views with `hidden` so `WorldMap`
+    never unmounts. Single-project worlds: header stays "Map", no town.
+  - **Refactor pass (this session's ask).** STANDARDS §9 rewritten (readable code first, short
+    comments only where needed, JSDoc only where the signature doesn't say it, one-line module
+    headers) + §6 reuse rules + §3 "prefer many small exact files" — the convention now matches
+    how the user wants it written. Applied to every changed file: long comment blocks trimmed;
+    `WorldMap.tsx` (was ~420 lines) split into `components/world-map/` —
+    `geometry.ts` (pure layout maths + room data, no Pixi), `sprite.ts` (one sprite: make +
+    draw), `rooms.ts` (`drawRooms`), `render-agents.ts` (the layout loop + tethers), and the
+    `.tsx` keeps only the Pixi lifecycle; `App.tsx` map panel extracted to `MapPanel.tsx` so
+    the shell is thin again; town selector moved `core/selectors.ts` → `core/town.ts`; subagent
+    attribution extracted `session.ts` → `agent/tool-call-owners.ts`.
+  - **Verified live in Chrome** (stub reverted after) both before and after the refactor —
+    identical behaviour: a 3-project / 6-agent scenario → town shows 3 cards, correct tallies,
+    attention border on the blocked project; card click → filtered building view with the
+    subagent tether intact; `← town` returns; dot click selects without zooming; a `sub-…`
+    `permission.requested` + ask → encounter names the subagent, the child row goes `blocked`
+    while the parent stays `working`; single-project reload → "Map" view, no regression. No
+    console errors.
 
 - **2026-09-08** — **Phase 2 Slice 2b: subagent tether in `WorldMap.tsx`.** Subagents
   (`AgentState.parentAgentId !== null`) render as a smaller sprite (`SUB_BODY_R` 6 vs `BODY_R`
@@ -291,6 +346,47 @@ Reference notes (paths as of the Phase 1.5 refactor — see Done 2026-09-05):
 
 ## Decisions
 
+- **2026-09-08** — **Only the Builder class may dispatch a subagent** (`Task`/`Agent` added to
+  `builder.ts` `tools`, no other class). A Builder is already unrestricted, so a
+  Builder-dispatched one-off cannot exceed the Builder itself; adding `Task` to Scout / Reviewer
+  / Runner / Keeper could launder a capability through an un-gated subagent and break that
+  class's hard guarantee. Revisit the restricted classes once it's confirmed whether the SDK's
+  `tools` cap propagates into a subagent (if it does, Scout + Reviewer become safe read-only
+  fan-out candidates). Chosen by the model, delegated by the user.
+- **2026-09-08** — **A subagent's `canUseTool` ask is attributed by reusing `translate`'s own
+  output**, not by re-parsing SDK messages. `translate` already resolves every
+  `tool.started`/`agent.spawned` to the right sprite (root or `sub-<id>`);
+  `agent/tool-call-owners.ts` indexes those drafts as `session.ts` logs them and answers
+  `resolve(toolUseId)` when `canUseTool` fires. One source of the "who owns this tool call"
+  logic, and it's a tiny unit-tested module rather than loose maps in `session.ts` (which
+  can't be unit-tested — it imports the SDK).
+- **2026-09-08** — **STANDARDS §9 rewritten toward readable-code-first / fewer comments** (with
+  §6 reuse rules and §3 "prefer small exact files"). The user's call: a well-named function or
+  module beats a JSDoc paragraph; comment the non-obvious only; module headers are one line.
+  The existing over-commented files aren't mass-edited — they get trimmed as they're touched.
+- **2026-09-08** — **`WorldMap.tsx` is split into `components/world-map/` `.ts` helpers**, not
+  kept as one 400+-line file. `geometry.ts` (pure — layout maths + room data, no Pixi; could
+  grow tests), `sprite.ts` (one sprite), `rooms.ts`, `render-agents.ts` (the loop + tethers);
+  the `.tsx` keeps only the Pixi lifecycle. A component with real internal complexity owning a
+  subfolder is now sanctioned in STANDARDS §3.
+- **2026-09-08** — **`StatusDot` is a shared primitive** (round dot in the `.status-<status>`
+  colour), used by `BuildingCard` now and available to the agent list / focus panel later —
+  rather than each place hand-rolling a `<span>`. The map keeps its own Pixi `STATUS_TINT` hex
+  (canvas needs numbers); the two are noted as matched, unification deferred.
+- **2026-09-08** — **The town overview groups by `cwd`, not by a git repo root or a
+  `pokehub.workspace.json` fence.** `cwd` is the only project signal an `agent.spawned` carries;
+  compounds / fences / courtyards / pipes (VISION "Projects are compounds") are a later, bigger
+  slice. A building is derived, throwaway (rule 2) — it exists because an agent works there.
+- **2026-09-08** — **`TownView` is plain DOM, not a second Pixi canvas.** The town is a
+  dashboard glance (same tier as the focus panel and raw log, both DOM), and two Pixi
+  `Application`s mounting/unmounting on every zoom toggle is exactly the init/destroy fragility
+  the gotchas warn about. `WorldMap` stays the single Pixi surface and never unmounts —
+  `App.tsx` toggles the two views with `hidden`.
+- **2026-09-08** — **A one-project (or empty) world has no town.** `useMapZoom` forces
+  `view: "building"` and `focused: null` (WorldMap shows the whole world) when
+  `townBuildings(world).length <= 1` — the common single-repo case is byte-for-byte unchanged,
+  the town only appears when there's actually something to overview.
+
 - **2026-09-08** — A subagent is an **`agent.spawned` with `parentAgentId` set**, not a new
   `agent.tethered` event — the SDK's `task_started` frame carries the parent link and fires
   before any child message, so the parent is always known at spawn time.
@@ -478,12 +574,25 @@ Reference notes (paths as of the Phase 1.5 refactor — see Done 2026-09-05):
 
 _Things learned the hard way. One line each — what broke, and what fixed it._
 
-- **A subagent's `canUseTool` prompt is attributed to the parent agent** — `session.ts`'s
-  `canUseTool` closure only has `opts.agentId` (the session root), and the SDK passes no
-  subagent identity on the callback, only `{ toolUseID }` (the child's tool-use id). So a
-  subagent asking to run `npm test` surfaces as "«parent» wants to run npm test" and blocks the
-  *parent* sprite. Not fixed in Slice 2 — needs a `toolUseID → sub-<id>` map at ask time. Logged
-  as loose end #2 in "Next up".
+- ~~**A subagent's `canUseTool` prompt is attributed to the parent agent**~~ — **fixed
+  2026-09-08.** `agent/tool-call-owners.ts` indexes `translate`'s `tool.started`/`agent.spawned`
+  drafts as `session.ts` logs them; `canUseTool` calls `resolve(toolUseID)` (the child's
+  tool-use id, which `translate` already keyed the child's `tool.started` on) and stamps the
+  asker on the ask + `permission.*` events. Timing is safe: the assistant `tool_use` message is
+  fully reduced before the SDK invokes `canUseTool` for that call.
+- **A sprite's Pixi click handler is bound once and outlives the render that made it** — so it
+  must read the live prop, not close over the one current at creation. `WorldMap`'s
+  `renderAgents` context passes `onSelect: (id) => propsRef.current.onSelect?.(id)`; a snapshot
+  (`p.onSelect`) would go stale for every already-created sprite. (It happened to work before
+  the split only because `setSelectedId` from `useState` is referentially stable.)
+- **`git checkout <path>` restores from the index, not HEAD** — a background step had staged
+  `src/core/selectors.ts`, so `git checkout src/core/selectors.ts` brought the *staged*
+  (unwanted) version back, not the original. Use `git reset` first, or
+  `git checkout HEAD -- <path>`. (Background agents/steps `git add` the whole tree — known.)
+- **CSS-module class names are hashed, so `[class*="ComponentName"]` DOM selectors don't work
+  in stub verification** — the class is `_card_11dky_1`, not `card`. Match on the hashed prefix
+  (`[class*="dot"]` still catches `_dot_…`) or query by structure/`title`, and prefer a
+  screenshot for anything visual.
 - **Pixi child z-order is insertion order** — adding the tether `Graphics` to `layer` *before*
   any sprite `Container` keeps it painted underneath, and it stays there because every new
   sprite `addChild`s on top later. No `zIndex`/`sortableChildren` needed.
@@ -509,10 +618,10 @@ _Things learned the hard way. One line each — what broke, and what fixed it._
 - **Piping a `node scripts/*.mjs` that runs `query()` through `head` truncates the run** — when
   `head` closes the pipe after N lines, node gets SIGPIPE and the stream aborts mid-session
   (looked like the SDK hanging at message ~14). Redirect to a file, then read the file.
-- **No agent class allow-lists `Task`/`Agent`** — `toolsForClass()` returns a hard `tools` cap
-  for every known class and none include it, so a classed agent literally cannot dispatch a
-  subagent. Only an unknown/unclassed class (cap = "no restriction") can. Flagged for a
-  decision (see "VISION.md needs updating").
+- ~~**No agent class allow-lists `Task`/`Agent`**~~ — **resolved 2026-09-08: Builder does now,
+  and only Builder.** The other four classes still don't, on purpose (see Decisions). If a
+  Scout/Reviewer/Runner/Keeper ever needs to fan out, first confirm the SDK propagates the
+  parent's `tools` cap to the subagent — otherwise the restricted class's guarantee has a hole.
 
 - **CSS Modules lose every equal-specificity tie to `global.css` unless the global sheet is
   imported first.** `main.tsx` imported `App.tsx` (which transitively pulls in every
@@ -723,11 +832,13 @@ _Decisions made in a session that contradict the spec. Recorded here, not edited
   script, an unlisted runner). The honest phrasing is "hard, and visible when attempted". A
   real guarantee needs a read-only filesystem for the class — worth adding to §Classes as a
   deferred item.
-- **Classes vs. subagent dispatch (found 2026-09-08, Slice 2a).** VISION makes "legible
-  delegation … close to the whole point of this app" and describes classes handing work off to
-  each other. But classes are enforced as a hard `tools` allow-list passed to `query()`, and
-  **no class includes `Task`/`Agent`** — so as written, a Builder/Scout/Reviewer/Runner/Keeper
-  physically cannot dispatch a subagent; only an unclassed agent can. Either the class
-  allow-lists need `Task` added (probably Builder + Scout + Reviewer — the ones that would
-  delegate), or VISION should say which classes may delegate. Needs a call before Slice 2b's
-  tether is reachable in the real app.
+- **Classes vs. subagent dispatch (found 2026-09-08, Slice 2a; resolved 2026-09-08).** VISION
+  makes "legible delegation … close to the whole point of this app" and describes classes
+  handing work off to each other, but classes are a hard `tools` allow-list and none included
+  `Task`/`Agent`. **Resolved for now by giving Builder alone `Task`** (a Builder is already
+  unrestricted, so it can't launder anything through a subagent). VISION §Classes should say
+  this explicitly — *which* classes may delegate — and note that a restricted class delegating
+  safely depends on the SDK propagating the parent's `tools` cap into the subagent, which is
+  unverified. If that propagation holds, Scout + Reviewer are the natural next classes to allow
+  (read-only fan-out). A hard guarantee for a delegating restricted class still ultimately
+  needs the read-only-filesystem-per-class item already noted above.
