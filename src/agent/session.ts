@@ -195,12 +195,17 @@ export function spawnAgent(opts: SpawnAgentOptions): AgentHandle {
           // Classes are permissions, not costumes: the class's allow-list is a
           // hard cap on the built-in tool set, applied before the model sees it.
           ...(classTools ? { tools: classTools } : {}),
+          // Forward a subagent's text/thinking blocks too (not just its
+          // tool_use/tool_result), so a tethered child sprite gets a thought
+          // bubble like any other agent. Its tool calls arrive tagged with
+          // `parent_tool_use_id` either way; `translate` keys the child off it.
+          forwardSubagentText: true,
           canUseTool,
         },
       });
 
       for await (const msg of stream) {
-        for (const draft of translate(msg, opts.agentId, sessionId)) {
+        for (const draft of translate(msg, opts.agentId, sessionId, opts.cwd)) {
           emit(draft);
         }
       }

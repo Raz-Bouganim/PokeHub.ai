@@ -49,3 +49,16 @@ export function isStalled(agent: AgentState, now: number): boolean {
 export function needsAttention(world: WorldState): AgentState[] {
   return agentList(world).filter((a) => a.status === "blocked" || a.status === "erroring");
 }
+
+/**
+ * The subagents tethered to a given parent — the ones the renderer draws a
+ * tether line to and offsets toward the parent. One level only: a subagent's
+ * own subagents tether to the session root.
+ *
+ * @param world    - the world state
+ * @param parentId - the dispatching agent's id
+ * @returns its subagents, in insertion order (a fresh array)
+ */
+export function subagentsOf(world: WorldState, parentId: string): AgentState[] {
+  return agentList(world).filter((a) => a.parentAgentId === parentId);
+}

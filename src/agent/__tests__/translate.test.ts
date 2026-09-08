@@ -288,6 +288,143 @@ describe("translate — SDK message -> event drafts", () => {
   });
 });
 
+describe("translate — subagent dispatch (Task/Agent)", () => {
+  // Shapes recorded from a real `claude` stream (SDK 0.3.x): the dispatch tool
+  // is on the wire as `name: "Agent"`, the subagent rides the same session,
+  // tagged with `parent_tool_use_id`.
+  const taskStarted = {
+    type: "system",
+    subtype: "task_started",
+    task_id: "task_abc",
+    tool_use_id: "toolu_dispatch",
+    task_type: "local_agent",
+    description: "Count .ts files under src/",
+    subagent_type: "general-purpose",
+    spawn_depth: 1,
+    prompt: "Count how many .ts files are under src/. Report the number.",
+    session_id: "sess-1",
+  };
+  const childToolUse = {
+    type: "assistant",
+    session_id: "sess-1",
+    parent_tool_use_id: "toolu_dispatch",
+    message: {
+      content: [
+        { type: "tool_use", id: "c1", name: "Bash", input: { command: "find src -name '*.ts'" } },
+      ],
+    },
+  };
+  const taskNotification = {
+    type: "system",
+    subtype: "task_notification",
+    task_id: "task_abc",
+    tool_use_id: "toolu_dispatch",
+    status: "completed",
+    output_file: "/tmp/task_abc.output",
+    summary: "43 .ts files",
+    session_id: "sess-1",
+  };
+
+  it("spawns a child sprite from task_started, tethered to the root, with the task prompt", () => {
+    const drafts = translate(taskStarted, "root", "sess-1", "/repo");
+    expect(drafts).toEqual([
+      {
+        kind: "agent.spawned",
+        source: "agent",
+        agentId: "sub-toolu_dispatch",
+        sessionId: "sess-1",
+        name: "Count .ts files under src/",
+        agentClass: "general-purpose",
+        cwd: "/repo",
+        parentAgentId: "root",
+      },
+      {
+        kind: "agent.prompt",
+        source: "user",
+        agentId: "sub-toolu_dispatch",
+        sessionId: "sess-1",
+        text: "Count how many .ts files are under src/. Report the number.",
+      },
+    ]);
+  });
+
+  it("ignores a task_started that isn't a subagent (backgrounded Bash / workflow)", () => {
+    expect(
+      translate({ ...taskStarted, task_type: "local_bash" }, "root", "sess-1", "/repo"),
+    ).toEqual([]);
+  });
+
+  it("attributes a parent_tool_use_id-tagged tool call to the child, not the root", () => {
+    const [draft] = translate(childToolUse, "root", "sess-1");
+    expect(draft).toMatchObject({
+      kind: "tool.started",
+      agentId: "sub-toolu_dispatch",
+      tool: "Bash",
+    });
+  });
+
+  it("exits the child on a terminal task_notification", () => {
+    expect(translate(taskNotification, "root", "sess-1")).toEqual([
+      {
+        kind: "agent.exited",
+        source: "agent",
+        agentId: "sub-toolu_dispatch",
+        sessionId: "sess-1",
+        code: 0,
+      },
+    ]);
+  });
+
+  it("marks a failed/stopped task_notification as a non-zero exit with a reason", () => {
+    const [draft] = translate({ ...taskNotification, status: "failed" }, "root", "sess-1");
+    expect(draft).toMatchObject({ kind: "agent.exited", code: 1, reason: "failed" });
+  });
+
+  it("full pipe: parent + tethered child, both in the world", () => {
+    const parentDispatch = {
+      type: "assistant",
+      session_id: "sess-1",
+      message: {
+        content: [
+          {
+            type: "tool_use",
+            id: "toolu_dispatch",
+            name: "Agent",
+            input: { description: "Count .ts files under src/", subagent_type: "general-purpose" },
+          },
+        ],
+      },
+    };
+    const childResult = {
+      type: "user",
+      session_id: "sess-1",
+      parent_tool_use_id: "toolu_dispatch",
+      message: { content: [{ type: "tool_result", tool_use_id: "c1", is_error: false }] },
+    };
+    const stream = [
+      { type: "system", subtype: "init", session_id: "sess-1", cwd: "/repo" },
+      parentDispatch,
+      taskStarted,
+      childToolUse,
+      childResult,
+      taskNotification,
+      { type: "result", subtype: "success", session_id: "sess-1", is_error: false },
+    ];
+    const events = stamp(stream.flatMap((m) => translate(m, "root", null, "/repo")));
+
+    let world: WorldState = initialWorld();
+    for (const event of events) world = reduce(world, event);
+
+    const child = world.agents["sub-toolu_dispatch"]!;
+    expect(child.parentAgentId).toBe("root");
+    expect(child.status).toBe("exited");
+    expect(child.journal.map((j) => j.tool)).toEqual(["Bash"]);
+    // The root ran the dispatch tool and finished its turn cleanly.
+    expect(world.agents["root"]!.status).toBe("idle");
+    expect(world.agents["root"]!.journal.map((j) => j.tool)).toEqual(["Agent"]);
+  });
+});
+
 describe("translate + reduce — the full pipe on a recorded stream", () => {
   it("drives an agent from spawn to idle, walking into the Library", () => {
     const drafts = sdkStream.flatMap((m) => translate(m, "a1", null));

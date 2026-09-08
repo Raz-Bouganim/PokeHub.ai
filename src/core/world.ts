@@ -85,6 +85,7 @@ export interface AgentState {
   readonly agentClass: string;
   readonly cwd: string;
   readonly sessionId: string | null;
+  readonly parentAgentId: string | null;
   readonly location: Location;
   readonly status: AgentStatus;
   readonly thought: string | null;

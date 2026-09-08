@@ -6,6 +6,11 @@
  * This is a *projection* — it reads `world` (built by the pure reducer from the
  * event log) and never writes back. Position snaps to `world` on every render
  * (decided item #2); smooth walking is best-effort polish, deferred.
+ *
+ * Subagents (an `AgentState` with `parentAgentId` set) render as a smaller
+ * sprite in whatever room their own tool calls place them, with a thin tether
+ * line back to the parent — nesting made visible instead of inferred from
+ * transcript indentation (VISION "Agents and parties").
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -171,8 +176,14 @@ function fitMono(text: string, maxPx: number, fontSize: number): string {
   return `${text.slice(0, maxChars - 1)}…`;
 }
 
+/** Body radius: a subagent is a smaller sprite than a roster agent — the
+ *  roster-vs-one-off distinction from VISION, shown not just labelled. */
+const BODY_R = 9;
+const SUB_BODY_R = 6;
+
 function renderAgents(
   layer: Container,
+  tethers: Graphics,
   sprites: Map<string, Sprite>,
   world: WorldState,
   selectedId: string | null,
@@ -215,20 +226,22 @@ function renderAgents(
       s.container.alpha = a.status === "exited" ? 0.4 : a.status === "idle" ? 0.7 : 1;
 
       const tint = STATUS_TINT[a.status];
+      const isSub = a.parentAgentId !== null;
+      const r = isSub ? SUB_BODY_R : BODY_R;
       s.body.clear();
-      s.body.circle(0, 0, 9).fill(tint);
+      s.body.circle(0, 0, r).fill(tint);
       // Stable per-agent accent ring — identity, independent of status colour,
       // so the same agent reads the same everywhere (raw log rows too).
-      s.body.circle(0, 0, 11).stroke({
+      s.body.circle(0, 0, r + 2).stroke({
         width: 1.5,
         color: agentColor(a.id),
         alpha: 0.9,
       });
       if (a.status === "blocked" || a.status === "erroring") {
-        s.body.circle(0, 0, 13).stroke({ width: 2, color: tint });
+        s.body.circle(0, 0, r + 4).stroke({ width: 2, color: tint });
       }
       if (a.id === selectedId) {
-        s.body.circle(0, 0, 16).stroke({ width: 1.5, color: 0x9aa0d8, alpha: 0.9 });
+        s.body.circle(0, 0, r + 7).stroke({ width: 1.5, color: 0x9aa0d8, alpha: 0.9 });
       }
 
       // Truncate each label to its own cell so it can't reach a neighbour.
@@ -239,6 +252,28 @@ function renderAgents(
       s.thought.text = bubble;
       s.thought.visible = bubble.length > 0;
       s.thought.x = clampCenteredX(s.container.x, s.thought.width);
+    });
+  }
+
+  // Tethers, drawn last but beneath the sprites (the graphics object sits at the
+  // back of `layer`). Every sprite's position is final by now. One line per
+  // subagent, in that agent's own identity colour so which child is whose reads
+  // at a glance; skipped when the parent has no sprite (unknown / not yet seen).
+  tethers.clear();
+  for (const a of agentList(world)) {
+    if (a.parentAgentId === null) continue;
+    const child = sprites.get(a.id);
+    const parent = sprites.get(a.parentAgentId);
+    if (!child || !parent) continue;
+    const faded = a.status === "exited" || (parent.container.alpha ?? 1) < 1;
+    tethers
+      .moveTo(child.container.x, child.container.y)
+      .lineTo(parent.container.x, parent.container.y)
+      .stroke({ width: 1.5, color: agentColor(a.id), alpha: faded ? 0.15 : 0.4 });
+    // A dot at the parent end reads as "attached to", not "crossed by".
+    tethers.circle(parent.container.x, parent.container.y, 2).fill({
+      color: agentColor(a.id),
+      alpha: faded ? 0.2 : 0.6,
     });
   }
 
@@ -260,6 +295,7 @@ export function WorldMap({
 }): JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null);
   const layerRef = useRef<Container | null>(null);
+  const tetherRef = useRef<Graphics | null>(null);
   const spritesRef = useRef<Map<string, Sprite>>(new Map());
   const [error, setError] = useState<string | null>(null);
   // The async Pixi `init()` callback below draws whatever these refs hold when
@@ -317,8 +353,19 @@ export function WorldMap({
         drawRooms(app.stage);
         const layer = new Container();
         app.stage.addChild(layer);
+        // Tethers go in first so they render beneath every sprite container.
+        const tethers = new Graphics();
+        layer.addChild(tethers);
         layerRef.current = layer;
-        renderAgents(layer, spritesRef.current, worldRef.current, selectedIdRef.current, select);
+        tetherRef.current = tethers;
+        renderAgents(
+          layer,
+          tethers,
+          spritesRef.current,
+          worldRef.current,
+          selectedIdRef.current,
+          select,
+        );
       })
       .catch((err: unknown) => {
         // A dead Pixi panel should say why, not sit blank.
@@ -329,6 +376,7 @@ export function WorldMap({
     return () => {
       disposed = true;
       layerRef.current = null;
+      tetherRef.current = null;
       spritesRef.current = new Map();
       if (initialised) app.destroy(true, { children: true });
     };
@@ -338,8 +386,15 @@ export function WorldMap({
 
   // Redraw sprites whenever the world — or the selection highlight — changes.
   useEffect(() => {
-    if (layerRef.current) {
-      renderAgents(layerRef.current, spritesRef.current, world, selectedId, select);
+    if (layerRef.current && tetherRef.current) {
+      renderAgents(
+        layerRef.current,
+        tetherRef.current,
+        spritesRef.current,
+        world,
+        selectedId,
+        select,
+      );
     }
     // `select` is a stable wrapper over a ref, so it is not a dep.
   }, [world, selectedId]);

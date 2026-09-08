@@ -35,6 +35,9 @@ export function toolTarget(tool: string, input: ToolInput): string | null {
     case "WebFetch":
     case "WebSearch":
       return str("url") ?? str("query") ?? null;
+    case "Agent":
+    case "Task":
+      return str("description") ?? str("subagent_type") ?? null;
     default:
       return null;
   }

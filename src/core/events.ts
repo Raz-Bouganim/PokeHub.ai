@@ -50,15 +50,28 @@ interface EventBase {
   readonly sessionId: string | null;
 }
 
-/** A roster agent (or one-off) has been created as a process we supervise. */
+/** A roster agent (or one-off) has been created as a process we supervise.
+ *
+ * A subagent (a Task/Agent dispatch) is also an `agent.spawned` — same event,
+ * with `parentAgentId` set to the dispatcher. It is NOT a separate process or
+ * session: the SDK runs it inside the parent's stream, tagged with
+ * `parent_tool_use_id`, and `translate` mints a stable child id from that. */
 export interface AgentSpawnedEvent extends EventBase {
   readonly kind: "agent.spawned";
   readonly name: string;
   /** Class from the agent definition. A hard tool restriction, enforced before
    *  the model sees the option (see `agent-class/` + `session.ts`), not a
-   *  costume. */
+   *  costume. For a subagent this is its `subagent_type` (e.g.
+   *  `general-purpose`) — descriptive only, since a subagent shares the
+   *  parent's process and is not separately gated. */
   readonly agentClass: string;
   readonly cwd: string;
+  /** Set only when this agent is a subagent: the PokeHub id of the agent that
+   *  dispatched it. The renderer tethers the child sprite to this parent and
+   *  makes it follow. Absent for a composer-spawned roster agent. Deep nesting
+   *  (a subagent spawning a subagent) tethers to the session root, not the
+   *  intermediate agent — `translate` only knows the root. */
+  readonly parentAgentId?: string;
 }
 
 /** The claude process reported its session id (stream-json `system/init`). */

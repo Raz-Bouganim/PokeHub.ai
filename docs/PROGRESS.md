@@ -11,26 +11,30 @@ now the code-conventions authority; follow it for every change and keep `npm run
 (typecheck + lint `--max-warnings 0` + format:check + test) green before every commit.
 Housekeeping: the local `phase-1.5-coding-standards` branch is merged and can be deleted.
 
-Slice 1 (multi-agent map legibility) done 2026-09-05 (see Done). Remaining slices, in order:
+Slice 2 (subagent tethering) done 2026-09-08 — 2a (data) + 2b (WorldMap render), committed on
+branch `phase-2-subagent-tethering` (not yet merged to `main`). See Done. Remaining Phase 2
+work, pick one and confirm scope with the user before building:
 
-**Start here — Slice 2: subagent tethering.** Make nesting visible instead of inferred from
-transcript indentation. A one-off subagent should render tethered to (and following) its parent
-sprite. Concretely: (a) `src/agent/translate.ts` needs to emit a parent→child link when the SDK
-dispatches a `Task` tool call — the `Task` tool-use carries the subagent prompt. Find where
-translate sees `Task` and thread a `parentAgentId` through. **First verify how the SDK actually
-surfaces subagent activity** — likely the *same* `query()` stream tagged with
-`parent_tool_use_id`, not a separate session id as this note originally assumed. Spike it with a
-throwaway `scripts/_dump-task.mjs` before designing the event. (b) The event schema (`src/core/events.ts`) needs the parent id on
-`agent.spawned` (or a new `agent.tethered` event — decide based on whether the parent is known
-at spawn time). (c) The reducer (`src/core/reducer.ts`) stores it on `AgentState`. (d)
-`src/renderer/src/components/WorldMap.tsx` draws a line from child to parent and offsets the
-child's cell position toward the parent. Watch: a subagent's `agent.spawned` may arrive before or after the parent's `Task`
-`tool.started` — the reducer must tolerate either order (same lesson as the follow-up feature's
-out-of-order replay guard).
+**Two loose ends from Slice 2, decide first:**
+1. **No agent class allows the `Task`/`Agent` tool** (`src/core/agent-class/*.ts` `tools`
+   lists) — the SDK `tools` cap is a hard allow-list, so a classed agent (Builder/Scout/…)
+   physically cannot dispatch a subagent; only an unclassed agent can. Tethering is fully built
+   but nothing triggers it for a real classed agent. Likely fix: add `Task` to Builder (and
+   maybe Scout/Reviewer). Needs a call — see "VISION.md needs updating".
+2. **A subagent's tool-permission prompt is attributed to the parent**, not the child —
+   `session.ts` `canUseTool` only knows `opts.agentId` (the root); the SDK gives no subagent
+   context on the callback. So the encounter dialog says "Boss wants to run `npm test`" when the
+   subagent asked, and the parent sprite goes `blocked` while the child's tool is pending. Its
+   own slice. `canUseTool`'s `{ toolUseID }` is the child's tool-use id but nothing yet maps it
+   back to a `sub-…` agent at ask time.
 
-Then: (3) town overview as a new zoom level (every project a building, agents as dots — the
-"am I done?" zoom); (4) visible rate-limit / budget gauge (PP/Money in VISION's glance table).
-Confirm scope with the user before building each.
+**Then, the remaining Phase 2 slices, in order:**
+- (3) **Town overview** as a new zoom level — every project a building, all agents as dots, the
+  "am I done?" zoom.
+- (4) **Visible rate-limit / budget gauge** — PP/Money in VISION's glance table. The
+  `rate_limit_event` SDK frame (`rate_limit_info.unifiedWindows.{five_hour,seven_day}` with
+  `utilization` + `resetsAt`) is the real source; `translate.ts` currently ignores it. Needs a
+  new event kind + reducer field + a gauge in the renderer.
 
 Then, in rough priority order:
 - **Encounter dialog is below VISION's "killer moment" bar** (found in the 2026-09-05 QA pass):
@@ -39,9 +43,9 @@ Then, in rough priority order:
   `components/EncounterDialog.tsx`. Its own small task — the mechanic's whole justification is
   the risk-surfacing.
 - **Map identity ring is thin / buried** (same QA pass): the per-agent accent ring in
-  `WorldMap.tsx` (1.5px, radius 11) is drowned by the status ring (radius 13) + selection ring
-  (radius 16), and vanishes on `exited` agents (container alpha 0.4). Needs an art-direction
-  call — defer to Phase 3 unless it bites sooner.
+  `WorldMap.tsx` (1.5px, `r+2`) is drowned by the status ring (`r+4`) + selection ring (`r+7`),
+  and vanishes on `exited` agents (container alpha 0.4). Needs an art-direction call — defer to
+  Phase 3 unless it bites sooner.
 - Swap the hand-rolled `Markdown.tsx` for `react-markdown` **only if** the transcript becomes
   central and the mini-renderer's gaps (nested lists, task lists) start to bite. Not now.
 - UI refactor / real art is **Phase 3**, not now — acknowledged and deferred on purpose.
@@ -89,6 +93,39 @@ Reference notes (paths as of the Phase 1.5 refactor — see Done 2026-09-05):
   Code-split before Phase 4 packaging; ignore until then.
 
 ## Done
+
+- **2026-09-08** — **Phase 2 Slice 2b: subagent tether in `WorldMap.tsx`.** Subagents
+  (`AgentState.parentAgentId !== null`) render as a smaller sprite (`SUB_BODY_R` 6 vs `BODY_R`
+  9) in their own room, with a thin line in the child's identity colour from the child to the
+  parent sprite (+ a small dot at the parent end); the line fades (alpha 0.15) when the child
+  or parent is exited/idle, and is skipped entirely when the parent has no sprite (unknown id —
+  no crash). All ring radii (`identity`, `blocked`/`erroring`, `selection`) are now `r`-relative
+  so they scale with the smaller body. Tethers are a single `Graphics` added to `layer` first
+  so they draw beneath every sprite; redrawn each `renderAgents` after all positions are final.
+  No position offset (the line carries the relationship) — noted as a possible refinement.
+  Verified live in Chrome via the throwaway stub across: 2 children in different rooms, a child
+  exiting (line fades), the parent moving rooms (lines follow), an orphan child (unknown
+  parent → no line), a blocked child, selecting a subagent (selection ring scales), and a full
+  replay of a real `npm run spike` subagent log. `npm run check` green, 141 tests (no new —
+  Pixi render, not unit-tested; covered by live verification). `WorldMap.tsx` only.
+  `scripts/_dump-task.mjs` deleted (throwaway from 2a).
+
+- **2026-09-08** — **Phase 2 Slice 2a: subagent tethering — data layer.** The SDK surfaces a
+  subagent inside the *parent's* `query()` stream (one session id), tagging every message with
+  a top-level `parent_tool_use_id`; dedicated `system/task_started` + `task_notification` frames
+  bookend it. `translate.ts` now: mints a stateless child id `sub-<Agent-tool-use-id>` (the same
+  id appears on all three frame types), emits `agent.spawned` (+`agent.prompt`) for the child
+  from `task_started` (gated `task_type === "local_agent"`), attributes any
+  `parent_tool_use_id`-tagged message's events to the child, and exits the child on
+  `task_notification`. `AgentSpawnedEvent.parentAgentId?` (optional — old logs replay);
+  `AgentState.parentAgentId`; `subagentsOf()` selector; `session.ts` passes
+  `forwardSubagentText: true` (so a child gets a thought bubble) and threads `cwd` into
+  `translate`. Reducer: `agent.spawned` no longer force-resets an already-progressed agent
+  (out-of-order tolerance), and drops `agent.exited` for an id never spawned (filters phantom
+  backgrounded-Bash `task_notification`s). `npm run check` green, **141 tests (was 129)**.
+  Verified end-to-end against a real `claude` stream via `npm run spike` (parent dispatches a
+  general-purpose subagent that runs Bash and reports back; child spawns tethered, works, exits
+  0; parent's Agent tool.finished → turn_finished → idle). Rendered in Slice 2b.
 
 - **2026-09-05** — **Phase 1.5 — coding standards + refactor. MERGED to `main`** (PR #1, merge
   `91a8bd1`). Branch `phase-1.5-coding-standards`, 11 commits, one reviewable slice each,
@@ -254,6 +291,32 @@ Reference notes (paths as of the Phase 1.5 refactor — see Done 2026-09-05):
 
 ## Decisions
 
+- **2026-09-08** — A subagent is an **`agent.spawned` with `parentAgentId` set**, not a new
+  `agent.tethered` event — the SDK's `task_started` frame carries the parent link and fires
+  before any child message, so the parent is always known at spawn time.
+- **2026-09-08** — The subagent tether is a **line + a smaller sprite, no position offset** —
+  the child stays in whatever room its own tool calls place it (that's real state, rule 1), and
+  the line + size difference carry "attached to / lesser". Nudging the child toward the parent
+  risks the sibling-overlap Slice 1 fixed, for marginal gain. Refinement noted, not done.
+- **2026-09-08** — A subagent's PokeHub id is **`sub-<Agent-tool-use-id>`**, derived, not
+  registered — the same tool-use id appears on `task_started` (`tool_use_id`), every child
+  message (`parent_tool_use_id`), and `task_notification`, so `translate` stays stateless (no
+  parent→child map to keep).
+- **2026-09-08** — A subagent completing is **`agent.exited`** (code 0, or 1 + `reason` on
+  `failed`/`stopped`), never `idle` — a one-off is gone when done and can't be followed up
+  (it has no `AgentHandle`); an `idle` sprite would invite a dead-end follow-up.
+- **2026-09-08** — `translate` gates the child spawn on **`task_type === "local_agent"`** —
+  `task_started` also fires for backgrounded Bash (`local_bash`) and ultracode
+  (`local_workflow`); `task_notification` has no such discriminator, so the reducer's
+  "can't exit an unknown agent" guard filters those instead.
+- **2026-09-08** — **`forwardSubagentText: true`** on the `query()` call — the default forwards
+  only a subagent's `tool_use`/`tool_result` blocks (a heartbeat); we want its text/thinking
+  too so a tethered sprite gets a thought bubble like any agent.
+- **2026-09-08** — Deep nesting (a subagent spawning a subagent) **tethers the grandchild to
+  the session root**, not the intermediate agent — `task_started` carries no parent link and
+  `translate` only knows the root id. One level of visible nesting is the Phase 2 goal; revisit
+  if depth-2 becomes common.
+
 - **2026-09-05** — **`docs/STANDARDS.md` is the code-conventions authority**, one line from
   `CLAUDE.md`; it changes only when a convention actually changes, never for status. Settled
   over 4 rounds of Q&A with the user before any code moved.
@@ -414,6 +477,42 @@ Reference notes (paths as of the Phase 1.5 refactor — see Done 2026-09-05):
 ## Gotchas
 
 _Things learned the hard way. One line each — what broke, and what fixed it._
+
+- **A subagent's `canUseTool` prompt is attributed to the parent agent** — `session.ts`'s
+  `canUseTool` closure only has `opts.agentId` (the session root), and the SDK passes no
+  subagent identity on the callback, only `{ toolUseID }` (the child's tool-use id). So a
+  subagent asking to run `npm test` surfaces as "«parent» wants to run npm test" and blocks the
+  *parent* sprite. Not fixed in Slice 2 — needs a `toolUseID → sub-<id>` map at ask time. Logged
+  as loose end #2 in "Next up".
+- **Pixi child z-order is insertion order** — adding the tether `Graphics` to `layer` *before*
+  any sprite `Container` keeps it painted underneath, and it stays there because every new
+  sprite `addChild`s on top later. No `zIndex`/`sortableChildren` needed.
+- **`javascript_tool` with a `location.reload()` then a long `await setTimeout` in the same
+  call fails** — "Inspected target navigated or closed": the reload detaches the inspected
+  context mid-evaluation. Reload in one call, push events in the next.
+- **The SDK's Task-dispatch tool is `name: "Agent"` on the wire, not `"Task"`** — the
+  `system/init` `tools` list says `Task`, but the emitted `tool_use` block is `Agent`
+  (SDK docs call it "the Agent/Task tool"). `translate`/`tool-labels` handle both names.
+- **Subagents ride the SAME `query()` stream and session id** — not a separate session as the
+  old Slice 2 note assumed. Every subagent message carries a top-level `parent_tool_use_id`
+  (envelope field, NOT inside `message`), plus `subagent_type`/`task_description`. Bookended by
+  `system/task_started` (before any child message; has `tool_use_id`, `task_type`,
+  `subagent_type`, `spawn_depth`, `prompt`) and `system/task_notification` (`tool_use_id`,
+  terminal `status`, `summary`). Confirmed via `scripts/_dump-task.mjs` against a real run.
+- **By default the SDK forwards only a subagent's `tool_use`/`tool_result` blocks**, not its
+  `text`/`thinking` — set `forwardSubagentText: true` in the `query()` options to get the full
+  child conversation.
+- **`system/task_notification` fires for backgrounded Bash and workflows too**, with no
+  `task_type` field to tell them apart from a subagent — so `translate` mints a `sub-<id>`
+  `agent.exited` for all of them and the reducer drops the exit for any id it never spawned
+  (new guard in `reduce()`). `task_started` is safely gated on `task_type === "local_agent"`.
+- **Piping a `node scripts/*.mjs` that runs `query()` through `head` truncates the run** — when
+  `head` closes the pipe after N lines, node gets SIGPIPE and the stream aborts mid-session
+  (looked like the SDK hanging at message ~14). Redirect to a file, then read the file.
+- **No agent class allow-lists `Task`/`Agent`** — `toolsForClass()` returns a hard `tools` cap
+  for every known class and none include it, so a classed agent literally cannot dispatch a
+  subagent. Only an unknown/unclassed class (cap = "no restriction") can. Flagged for a
+  decision (see "VISION.md needs updating").
 
 - **CSS Modules lose every equal-specificity tie to `global.css` unless the global sheet is
   imported first.** `main.tsx` imported `App.tsx` (which transitively pulls in every
@@ -624,3 +723,11 @@ _Decisions made in a session that contradict the spec. Recorded here, not edited
   script, an unlisted runner). The honest phrasing is "hard, and visible when attempted". A
   real guarantee needs a read-only filesystem for the class — worth adding to §Classes as a
   deferred item.
+- **Classes vs. subagent dispatch (found 2026-09-08, Slice 2a).** VISION makes "legible
+  delegation … close to the whole point of this app" and describes classes handing work off to
+  each other. But classes are enforced as a hard `tools` allow-list passed to `query()`, and
+  **no class includes `Task`/`Agent`** — so as written, a Builder/Scout/Reviewer/Runner/Keeper
+  physically cannot dispatch a subagent; only an unclassed agent can. Either the class
+  allow-lists need `Task` added (probably Builder + Scout + Reviewer — the ones that would
+  delegate), or VISION should say which classes may delegate. Needs a call before Slice 2b's
+  tether is reachable in the real app.
