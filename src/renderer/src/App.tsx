@@ -8,6 +8,7 @@ import { agentList } from "../../core/selectors.ts";
 import styles from "./App.module.css";
 import { AgentFocus } from "./components/AgentFocus.tsx";
 import { AgentList } from "./components/AgentList.tsx";
+import { BudgetGauge } from "./components/BudgetGauge.tsx";
 import { Composer } from "./components/Composer.tsx";
 import { EncounterDialog } from "./components/EncounterDialog.tsx";
 import { MapPanel } from "./components/MapPanel.tsx";
@@ -29,6 +30,7 @@ export function App(): JSX.Element {
       <Composer composer={composer} showNewButton={selectedId !== null} />
 
       <div className={styles.left}>
+        <BudgetGauge world={world} />
         <MapPanel world={world} selectedId={selectedId} onSelect={setSelectedId} />
         <AgentList
           agents={agentList(world)}

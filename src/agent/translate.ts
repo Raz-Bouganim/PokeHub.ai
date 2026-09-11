@@ -15,7 +15,7 @@
  * exits it.
  */
 
-import type { PokeHubEvent } from "../core/events.ts";
+import type { PokeHubEvent, RateLimitStatus, RateLimitWindow } from "../core/events.ts";
 import { bubbleLine } from "../core/text/bubble-line.ts";
 import { summarizeToolOutput } from "../core/text/summarize-tool-output.ts";
 
@@ -43,28 +43,36 @@ interface SdkMessageLike {
   message?: { content?: ContentBlock[] | string };
   is_error?: boolean;
   compact_metadata?: { trigger?: string };
-  /** Non-null on every message produced inside a subagent — the id of the
-   *  `Agent`/`Task` tool-use block that started it. `translate` mints the
-   *  child's PokeHub id from this, so a stateless translator can still
-   *  attribute the subagent's tool calls to the right sprite. */
   parent_tool_use_id?: string | null;
-  /** `system/task_*` fields (subagent lifecycle). `task_started` carries
-   *  `tool_use_id` (== the child's `parent_tool_use_id`), `task_type`,
-   *  `subagent_type`, `prompt`; `task_notification` carries `tool_use_id` + a
-   *  terminal `status` (but NO `task_type` — the reducer drops an exit for an
-   *  id it never spawned, which is how a backgrounded-Bash notification is
-   *  filtered out). */
   tool_use_id?: string;
   task_type?: string;
   description?: string;
   subagent_type?: string;
   prompt?: string;
   status?: string;
-  /** The tool's full structured Output object (per-tool shape), sibling to the
-   *  `tool_result` content block it answers — see `summarizeToolOutput`. Only
-   *  meaningful when `message.content` holds exactly one `tool_result` block;
-   *  the SDK does not batch several into one user message today. */
   tool_use_result?: unknown;
+  /** Hand-narrowed: the published `.d.ts` omits `unifiedWindows`, which real runs send. */
+  rate_limit_info?: {
+    status?: string;
+    unifiedWindows?: Record<string, { utilization?: number; resetsAt?: number } | null>;
+  };
+}
+
+const RATE_LIMIT_STATUSES: readonly RateLimitStatus[] = ["allowed", "allowed_warning", "rejected"];
+
+/** Unknown values read as `allowed` — an uninterpretable status must not make
+ *  the gauge claim the budget is spent. */
+function rateLimitStatus(raw: string | undefined): RateLimitStatus {
+  return RATE_LIMIT_STATUSES.find((s) => s === raw) ?? "allowed";
+}
+
+/** `null` when the SDK omitted the window or sent it half-filled.
+ *  `resetsAt` arrives in epoch seconds; downstream is milliseconds. */
+function rateLimitWindow(
+  raw: { utilization?: number; resetsAt?: number } | null | undefined,
+): RateLimitWindow | null {
+  if (!raw || typeof raw.utilization !== "number" || typeof raw.resetsAt !== "number") return null;
+  return { utilization: raw.utilization, resetsAt: raw.resetsAt * 1000 };
 }
 
 function contentBlocks(msg: SdkMessageLike): ContentBlock[] {
@@ -233,6 +241,22 @@ export function translate(
           });
         }
       }
+      break;
+    }
+
+    // Account-wide, so it attaches to the session root even mid-subagent.
+    case "rate_limit_event": {
+      const info = msg.rate_limit_info;
+      if (!info) break;
+      drafts.push({
+        kind: "rate_limit.updated",
+        source: "system",
+        agentId,
+        sessionId: sid,
+        status: rateLimitStatus(info.status),
+        fiveHour: rateLimitWindow(info.unifiedWindows?.["five_hour"]),
+        sevenDay: rateLimitWindow(info.unifiedWindows?.["seven_day"]),
+      });
       break;
     }
 

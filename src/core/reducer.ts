@@ -10,9 +10,11 @@
  * The reducer returns a new WorldState; it never mutates its input. It is
  * tolerant of events it does not recognise (returns state unchanged) so that
  * repo/CI/system events added later cannot crash replay of old logs.
+ *
+ * `rate_limit.updated` folds into the world, not an agent — the budget is account-wide.
  */
 
-import type { PokeHubEvent } from "./events.ts";
+import type { PokeHubEvent, RateLimitUpdatedEvent } from "./events.ts";
 import { roomForTool } from "./rooms.ts";
 import { bubbleLine } from "./text/bubble-line.ts";
 import { toolKind, toolTarget } from "./text/tool-labels.ts";
@@ -21,6 +23,7 @@ import {
   TRANSCRIPT_LIMIT,
   type AgentState,
   type JournalEntry,
+  type RateLimitState,
   type RecentTool,
   type TranscriptEntry,
   type WorldState,
@@ -108,11 +111,27 @@ export function reduce(state: WorldState, event: PokeHubEvent): WorldState {
 
   const agent = applyToAgent(prev, event);
 
-  return {
+  const next: WorldState = {
     ...state,
     maxSeqSeen: Math.max(state.maxSeqSeen, event.seq),
     agents: { ...state.agents, [event.agentId]: agent },
   };
+
+  if (event.kind !== "rate_limit.updated") return next;
+  return { ...next, rateLimit: freshestReading(state, event) };
+}
+
+/** Keeps whichever reading is newer by event `ts`. N agents report the same
+ *  budget, so readings interleave and can arrive out of order. */
+function freshestReading(state: WorldState, event: RateLimitUpdatedEvent): RateLimitState {
+  const incoming: RateLimitState = {
+    status: event.status,
+    fiveHour: event.fiveHour,
+    sevenDay: event.sevenDay,
+    observedAt: event.ts,
+  };
+  const held = state.rateLimit;
+  return held && held.observedAt > incoming.observedAt ? held : incoming;
 }
 
 function applyToAgent(prev: AgentState, event: PokeHubEvent): AgentState {

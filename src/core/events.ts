@@ -36,6 +36,22 @@ export type Location = Room | "route";
  *  classification can improve later without a schema change. */
 export type ToolInput = Readonly<Record<string, unknown>>;
 
+export type RateLimitStatus = "allowed" | "allowed_warning" | "rejected";
+
+export interface RateLimitWindow {
+  /** 0-1, not 0-100 — the SDK sends a fraction here, unlike its `/usage` response. */
+  readonly utilization: number;
+  /** Epoch ms. The SDK reports seconds; `translate` converts. */
+  readonly resetsAt: number;
+}
+
+/** A window is `null` when the SDK didn't report it — API-key, Bedrock and Vertex have none. */
+export interface RateLimitReading {
+  readonly status: RateLimitStatus;
+  readonly fiveHour: RateLimitWindow | null;
+  readonly sevenDay: RateLimitWindow | null;
+}
+
 interface EventBase {
   readonly v: typeof SCHEMA_VERSION;
   /** Monotonic per-log sequence, assigned by the writer. De-dup keys off this
@@ -163,6 +179,11 @@ export interface PermissionResolvedEvent extends EventBase {
   readonly decision: "allow_once" | "allow_always" | "refuse";
 }
 
+/** Account-wide, not per-agent: `agentId` only records which stream carried it. */
+export interface RateLimitUpdatedEvent extends EventBase, RateLimitReading {
+  readonly kind: "rate_limit.updated";
+}
+
 /** The claude process / session ended. */
 export interface AgentExitedEvent extends EventBase {
   readonly kind: "agent.exited";
@@ -184,6 +205,7 @@ export type PokeHubEvent =
   | SessionCompactedEvent
   | PermissionRequestedEvent
   | PermissionResolvedEvent
+  | RateLimitUpdatedEvent
   | AgentExitedEvent;
 
 export type EventKind = PokeHubEvent["kind"];

@@ -11,25 +11,32 @@ now the code-conventions authority; follow it for every change and keep `npm run
 (typecheck + lint `--max-warnings 0` + format:check + test) green before every commit.
 Housekeeping: the local `phase-1.5-coding-standards` branch is merged and can be deleted.
 
-Branch `phase-2-subagent-tethering` now carries Slice 2 (2a data + 2b render), both Slice 2
-loose ends, Slice 3 (town overview), and a readability/modularity refactor — all committed
-2026-09-09, **not yet merged to `main`**. `npm run check` (152 tests) + `npm run build` green.
+Branch `phase-2-subagent-tethering` carries Slice 2 (2a data + 2b render), both Slice 2 loose
+ends, Slice 3 (town overview), a readability/modularity refactor, and Slice 4 (the rate-limit
+gauge). All committed; **nothing is merged to `main` yet** — the encounter dialog is the last
+thing wanted before that PR. `npm run check` (169 tests) + `npm run build` green.
 
-**START HERE — Phase 2 Slice 4: visible rate-limit / budget gauge.** PP/Money in VISION's
-glance table (`Rate-limit budget left in window` → "make the budget visible *before* you spend
-it"). Plan:
-1. The SDK emits a `rate_limit_event` frame carrying `rate_limit_info.unifiedWindows.{five_hour,
-   seven_day}`, each with `utilization` (0-1) + `resetsAt`. `translate.ts` currently ignores it
-   — add a case. Confirm the exact shape first with a throwaway `scripts/_dump-*.mjs` (the
-   `.d.ts` isn't reliable — see Gotchas / the `tool_use_result` note).
-2. New event kind `rate_limit.updated` (source `"system"`), a `WorldState` field for the
-   latest reading (world-level, not per-agent — the budget is the account's), reducer case.
-   Selectors compute "% left" / "resets in Nm" taking `now` (time lives in selectors, not the
-   reducer).
-3. A gauge in the renderer — likely its own `components/` panel or a strip in `MapPanel`, red
-   under ~15% like the HP bar. Reuse tokens; keep it a real number, not decoration.
-4. Verify via the Chrome stub (push a `rate_limit.updated`, watch the gauge) and, if a real
-   `npm run spike` run surfaces the frame, against that.
+**Slice 4 — rate-limit gauge — DONE 2026-09-11** (see Done). Committed.
+
+**START HERE — the encounter dialog.** It is the last Phase 2 item, and the one thing PokeHub is
+meant to do *better* than the terminal rather than merely prettier — so it is what stands between
+this branch and a merge to `main`.
+
+The 2026-09-05 QA pass found it below VISION's "killer moment" bar. Today
+`components/EncounterDialog.tsx` renders the tool name plus `JSON.stringify(input)`. VISION's
+sketch wants: the bare command on its own line, the threatened action **quantified** ("It wants to
+DELETE 214 files"), an INSPECT affordance, and which agent is asking. What to do, in order:
+1. Read `components/EncounterDialog.tsx` + `hooks/use-permission-queue.ts` and
+   `shared/permissions.ts` (`PermissionAsk` already carries `agentId` / `agentName` / `tool` /
+   `input` / `title` — the identity half may need no new plumbing, check before adding any).
+2. Decide what "quantified" can honestly be. The count must be REAL (rule one) — for `Bash` it is
+   parsing the command, for `Edit`/`Write` the path. `core/text/tool-labels.ts` (`toolTarget`)
+   and `core/agent-class/bash-guard.ts` (`bashSegments`, `WRITE_SMELLS`) already parse Bash;
+   reuse them rather than writing a third parser. If a number can't be derived honestly, show no
+   number — never an estimate dressed as a fact.
+3. Keep the decision plumbing as-is (`canUseTool` → the queue → `resolvePermission`); this is a
+   presentation change, and VISION says so explicitly.
+4. Verify with the stub's `window.__ask(ask)` helper (see Gotchas) across Bash / Edit / a refusal.
 
 **Both Slice 2 loose ends — RESOLVED 2026-09-08 (see Done):** #1 Builder-only `Task`/`Agent`;
 #2 subagent-permission attribution via `agent/tool-call-owners.ts`. The `session.ts` wiring for
@@ -42,11 +49,6 @@ by `cwd`; `hooks/use-map-zoom.ts` owns the town↔building zoom; `MapPanel` → 
 with a `focusedProject` filter. Single-project worlds skip the town (no regression).
 
 Then, in rough priority order:
-- **Encounter dialog is below VISION's "killer moment" bar** (found in the 2026-09-05 QA pass):
-  it shows the tool name + `JSON.stringify(input)`, not the bare command with the threatened
-  action quantified ("wants to DELETE 214 files") and no INSPECT button, no agent identity.
-  `components/EncounterDialog.tsx`. Its own small task — the mechanic's whole justification is
-  the risk-surfacing.
 - **Map identity ring is thin / buried** (same QA pass): the per-agent accent ring in
   `components/world-map/sprite.ts` (1.5px, `r+2`) is drowned by the status ring (`r+4`) +
   selection ring (`r+7`), and vanishes on `exited` agents (container alpha 0.4). Needs an
@@ -105,6 +107,49 @@ Reference notes (paths as of the Phase 1.5 refactor — see Done 2026-09-05):
   Code-split before Phase 4 packaging; ignore until then.
 
 ## Done
+
+- **2026-09-11** — **Phase 2 Slice 4: the visible rate-limit / budget gauge.** VISION's PP/Money
+  row, end to end. `npm run check` (169 tests, was 152) + `npm run build` green. Uncommitted on
+  `phase-2-subagent-tethering`.
+  - **Shape confirmed against a real run first, and the plan in this file was half wrong.** The
+    published `.d.ts` types `SDKRateLimitInfo` as flat (`status` / `utilization` / `resetsAt` /
+    `rateLimitType`) with no `unifiedWindows` at all — but a real `rate_limit_event` frame DOES
+    carry `rate_limit_info.unifiedWindows.{five_hour,seven_day}`, each `{ utilization, resetsAt }`.
+    `utilization` is a FRACTION (0-1), and `resetsAt` is epoch SECONDS. (The `.d.ts`'s other
+    rate-limit shape, `SDKControlGetUsageResponse.rate_limits`, is a different mechanism — an
+    on-demand `get_usage` control request — and uses 0-100 percentages with `resets_at`. Don't
+    mix them up.) `translate` narrows `rate_limit_info` by hand for exactly this reason and
+    converts seconds to ms at the boundary, so nothing downstream knows.
+  - **Pipe:** `translate.ts` `case "rate_limit_event"` → new `rate_limit.updated` event
+    (`source: "system"`, `RateLimitStatus` / `RateLimitWindow` / `RateLimitReading` in
+    `core/events.ts`) → `WorldState.rateLimit` (`RateLimitState`, world-level — the budget is
+    the account's, not an agent's) → `rateLimitBudget(world, now)` in `core/selectors.ts`.
+  - **First world-level event.** Every other event folds into one agent; this one folds into the
+    world, and the reporting agent still gets its seq/ts bump (the event really is a line in its
+    log). `freshestReading()` keeps the newer of held-vs-incoming by comparing the two events'
+    own `ts` — every session reports the same account-wide number, so with N agents the readings
+    interleave and on replay the older one can arrive last.
+  - **Renderer:** `components/BudgetGauge.tsx` + `.module.css` — two bars (5h, 7d), percent left,
+    `resets in …`, red under the 15% line (`BUDGET_LOW_FRACTION`, same line as the HP bar), and a
+    `running low` / `rate limited` flag off `status`. Absent entirely when no session has reported
+    a reading, rather than drawing zeros. It owns its own 30s clock tick (`hooks/use-now.ts`) so a
+    minute-resolution countdown doesn't re-render the whole app. `core/text/duration.ts`
+    `shortDuration()` formats the countdown (pure, unit-tested; the Gym's Bash-timeout timer wants
+    the same helper later).
+  - **Verified** three ways: 17 new unit tests (reducer + selectors + translate against the
+    recorded payload); a real `npm run spike` run, where the frame arrived and landed in
+    `world.rateLimit` as `{ utilization: 0.18, resetsAt: 1789129200000 }`; and the stub in a real
+    Chrome tab, driven through all four states — no reading (no panel at all), `allowed` (78%/93%
+    green, no flag), `allowed_warning` (5h 9% red + amber "running low", 7d still green), and
+    `rejected` (0%, red "rate limited"). The live pass caught two things headless could not: the
+    low colour is correctly per-row (only the 5h figure reddened), and a stale reading pushed
+    from a second agent AFTER the rate-limited one did not overwrite it — `freshestReading()`
+    holds in the running app, not just the unit test. Console clean.
+  - **A standards-review pass ran before hand-off** and fixed four of its own findings: a docblock
+    claiming the HP bar already used the 15% line (it is still a placeholder with no number), a
+    `window` parameter shadowing the browser global, a `.low + .figure` CSS rule that coupled the
+    figure's colour to DOM sibling order (now `.row.low .figure`), and a conditional spread in
+    `reduce()` that read worse than a plain early return.
 
 - **2026-09-08** — **Phase 2: both Slice 2 loose ends + Slice 3 (town overview), then a
   readability/modularity refactor of the whole session's changed files.** `npm run check`
@@ -346,6 +391,24 @@ Reference notes (paths as of the Phase 1.5 refactor — see Done 2026-09-05):
 
 ## Decisions
 
+- **2026-09-11** — **The rate-limit budget is world-level state, not per-agent.** It is the
+  account's number; every session reports the same one. `WorldState.rateLimit` holds the latest
+  and `rate_limit.updated` is the first event that folds into the world rather than an agent (the
+  reporting agent still gets its seq/ts bump, since the event really is a line in its log).
+- **2026-09-11** — **A rate-limit reading is kept only if it is not older than the held one**,
+  compared by the two events' own `ts`. With N agents the readings interleave and replay of two
+  logs can deliver the older last; the alternative — last-write-wins — would let a stale
+  "plenty left" overwrite an active rate-limit, which is the worst lie this panel could tell.
+- **2026-09-11** — **Only the passive `rate_limit_event` stream is consumed; the `get_usage`
+  control request is not.** The passive frame already carries both windows, costs nothing, and is
+  already flowing. Revisit only if a window we need stops appearing there.
+- **2026-09-11** — **The gauge is absent when there is no reading, never a zeroed bar.** VISION's
+  rule one: no element that could be mistaken for information. API-key / Bedrock / Vertex sessions
+  have no plan windows at all, and an empty bar would read as "no budget left".
+- **2026-09-11** — **`docs/STANDARDS.md` §9 now defers to global §1 for comment length**, and a
+  module header is one line stating an invariant, not a description of the file's topic. Applied
+  to this session's new files. Decided by the user.
+
 - **2026-09-08** — **Only the Builder class may dispatch a subagent** (`Task`/`Agent` added to
   `builder.ts` `tools`, no other class). A Builder is already unrestricted, so a
   Builder-dispatched one-off cannot exceed the Builder itself; adding `Task` to Scout / Reviewer
@@ -574,6 +637,34 @@ Reference notes (paths as of the Phase 1.5 refactor — see Done 2026-09-05):
 
 _Things learned the hard way. One line each — what broke, and what fixed it._
 
+- **`javascript_tool` reads the DOM synchronously, before React has flushed.** Pushing an event
+  and reading `document.body.innerText` in the SAME call returns the PREVIOUS render — it looks
+  exactly like the event was dropped (the world's seq counter still shows the old value). Push in
+  one call, read or screenshot in the next. Cost ten minutes chasing a phantom reducer bug.
+- **`claude-in-chrome` can report "extension is not connected" while the MCP server is fine.**
+  `list_connected_browsers` returning `[]` (rather than erroring) is the tell: server up, zero
+  extension instances registered. A long-running Chrome that predates an extension install/update
+  never picks it up — quitting and reopening Chrome fixed it. `/mcp` reconnects the server side
+  only and is not enough on its own.
+- **With everything staged, `switch_browser` has nothing to broadcast to when only one browser is
+  registered** — it answers "No other browsers available". A single connected browser is already
+  the active one; just call `tabs_context_mcp`.
+- **The SDK's `.d.ts` UNDER-describes `rate_limit_event`, not just over-describes it.** The
+  published `SDKRateLimitInfo` has no `unifiedWindows` field, yet every real frame carries one —
+  and it is the only part worth drawing (the flat `utilization`/`resetsAt` describe one window,
+  whichever is currently binding). Same lesson as `tool_use_result`: dump a real run, believe the
+  wire. Also two different rate-limit shapes exist in that file — the passive `rate_limit_event`
+  (fraction 0-1, `resetsAt`, epoch seconds) and the on-demand `get_usage` control response
+  (percentage 0-100, `resets_at`, ISO string). They are not interchangeable.
+- **`claude-in-chrome` may simply be unavailable ("Browser extension is not connected").** The
+  fallback that worked: headless Chrome against the same throwaway stub —
+  `/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --headless=new --disable-gpu
+  --window-size=1400,900 --virtual-time-budget=6000 --screenshot=out.png "http://localhost:5173/?scenario"`.
+  Nothing can be pushed after load, so give the stub a `window.__scenario()` that fires itself on
+  a query-string flag. Same delete-it-afterwards rule as the interactive stub.
+- **`run_in_background` plus a trailing `&` detaches the process from the harness** — the wrapper
+  exits 0 immediately and the notification claims the command "completed" while the dev server is
+  still running. Drop the `&`; `run_in_background` already backgrounds it.
 - ~~**A subagent's `canUseTool` prompt is attributed to the parent agent**~~ — **fixed
   2026-09-08.** `agent/tool-call-owners.ts` indexes `translate`'s `tool.started`/`agent.spawned`
   drafts as `session.ts` logs them; `canUseTool` calls `resolve(toolUseID)` (the child's

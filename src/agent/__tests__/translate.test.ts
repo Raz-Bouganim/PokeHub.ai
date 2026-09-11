@@ -444,3 +444,71 @@ describe("translate + reduce — the full pipe on a recorded stream", () => {
     expect(locations).toContain("library");
   });
 });
+
+describe("translate — rate_limit_event (recorded payload)", () => {
+  /** Verbatim from a real run — the published `.d.ts` omits `unifiedWindows`. */
+  const frame = {
+    type: "rate_limit_event",
+    rate_limit_info: {
+      status: "allowed",
+      resetsAt: 1789129200,
+      rateLimitType: "five_hour",
+      overageStatus: "rejected",
+      overageDisabledReason: "org_level_disabled",
+      isUsingOverage: false,
+      unifiedWindows: {
+        five_hour: { utilization: 0.05, resetsAt: 1789129200 },
+        seven_day: { utilization: 0.06, resetsAt: 1789275600 },
+      },
+    },
+    uuid: "ab6b414b-cea4-4d4d-a69a-45601c6a6ffc",
+    session_id: "sess-1",
+  };
+
+  it("emits one world-level rate_limit.updated with both windows in epoch ms", () => {
+    const drafts = translate(frame, "root", "sess-1");
+    expect(drafts).toEqual([
+      {
+        kind: "rate_limit.updated",
+        source: "system",
+        agentId: "root",
+        sessionId: "sess-1",
+        status: "allowed",
+        fiveHour: { utilization: 0.05, resetsAt: 1789129200_000 },
+        sevenDay: { utilization: 0.06, resetsAt: 1789275600_000 },
+      },
+    ]);
+  });
+
+  it("keeps the reading on the session root even mid-subagent", () => {
+    const drafts = translate({ ...frame, parent_tool_use_id: "task-1" }, "root", "sess-1");
+    expect(drafts[0]?.agentId).toBe("root");
+  });
+
+  it("reads an unrecognised status as allowed rather than claiming no budget", () => {
+    const drafts = translate(
+      { ...frame, rate_limit_info: { ...frame.rate_limit_info, status: "some_future_status" } },
+      "root",
+      "sess-1",
+    );
+    expect(drafts[0]).toMatchObject({ status: "allowed" });
+  });
+
+  it("drops a window the SDK sent half-filled, and the frame when info is missing", () => {
+    const [draft] = translate(
+      {
+        ...frame,
+        rate_limit_info: {
+          status: "rejected",
+          unifiedWindows: { five_hour: { utilization: 0.9 }, seven_day: null },
+        },
+      },
+      "root",
+      "sess-1",
+    );
+    expect(draft).toMatchObject({ status: "rejected", fiveHour: null, sevenDay: null });
+    expect(translate({ type: "rate_limit_event", session_id: "sess-1" }, "root", "sess-1")).toEqual(
+      [],
+    );
+  });
+});

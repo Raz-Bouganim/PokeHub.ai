@@ -6,7 +6,7 @@
  * arrays for each change; the compiler enforces that it never mutates in place.
  */
 
-import { SCHEMA_VERSION, type Location, type ToolInput } from "./events.ts";
+import { SCHEMA_VERSION, type Location, type RateLimitReading, type ToolInput } from "./events.ts";
 
 /** Glance-level status. Phase 0 covers the states that fall straight out of the
  *  event stream with zero inference (VISION "Stuck agents" table). `stalled` and
@@ -126,19 +126,27 @@ export interface AgentState {
   readonly lastSeq: number;
 }
 
+/** The latest plan rate-limit reading, and when it was observed. */
+export interface RateLimitState extends RateLimitReading {
+  /** `ts` of the source event — stops a late reading overwriting a fresher one. */
+  readonly observedAt: string;
+}
+
 export interface WorldState {
   readonly schemaVersion: number;
   readonly agents: Readonly<Record<string, AgentState>>;
   /** Highest seq seen across all agents. Display/debug only — NOT a de-dup key
    *  (each agent's log has its own seq space). */
   readonly maxSeqSeen: number;
+  /** `null` until a session reports one; always `null` for API-key / Bedrock / Vertex. */
+  readonly rateLimit: RateLimitState | null;
 }
 
 /**
  * The empty world — the starting point for replay and for a fresh session.
  *
- * @returns a new `WorldState` with no agents and `maxSeqSeen` 0
+ * @returns `maxSeqSeen` 0, no agents, no rate-limit reading
  */
 export function initialWorld(): WorldState {
-  return { schemaVersion: SCHEMA_VERSION, agents: {}, maxSeqSeen: 0 };
+  return { schemaVersion: SCHEMA_VERSION, agents: {}, maxSeqSeen: 0, rateLimit: null };
 }

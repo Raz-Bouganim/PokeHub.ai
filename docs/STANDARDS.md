@@ -180,16 +180,10 @@ Global error rules apply (typed results for expected failures, throw only for
 
 ## 9. Comments & docs
 
-The global documentation policy applies verbatim: readable code first, inline
-comments only for a non-local constraint / upstream quirk / invariant the types
-can't express / why-not-the-obvious-thing, and a short purpose+params+returns
-docblock on every exported function.
+§1 is the policy, including the length budget. Two PokeHub additions:
 
-Two PokeHub additions:
-
-- **Module header: one line, when the filename and exports don't already tell
-  you** — and make it a real invariant ("only place that imports Electron", the
-  reducer's purity).
+- **Module header** — §1 allows one line for an invariant. Ours are: "only place that
+  imports Electron", the reducer's purity. Not a description of the file's topic.
 - **A render file not under unit test says so in a one-line header.**
 
 ---

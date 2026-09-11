@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { PokeHubEvent } from "../events.ts";
 import { parseLog } from "../log.ts";
 import { reduce, replay } from "../reducer.ts";
-import { isStalled, needsAttention, subagentsOf } from "../selectors.ts";
+import { isStalled, needsAttention, rateLimitBudget, subagentsOf } from "../selectors.ts";
 import { initialWorld, TRANSCRIPT_LIMIT } from "../world.ts";
 
 const fixture = fileURLToPath(
@@ -1325,5 +1325,114 @@ describe("selectors — time lives here, not in the reducer", () => {
     const world = replay(events.slice(0, 6), initialWorld());
     const now = Date.parse("2026-08-29T10:15:00.000Z");
     expect(isStalled(world.agents["scout-1"]!, now)).toBe(true);
+  });
+});
+
+describe("reducer + selectors — the plan rate-limit budget", () => {
+  const FIVE_HOUR_RESET = Date.parse("2026-08-29T14:00:00.000Z");
+  const SEVEN_DAY_RESET = Date.parse("2026-09-03T00:00:00.000Z");
+
+  /** As `translate` emits it: windows in epoch ms, `fiveHour` a 0-1 fraction. */
+  function reading(seq: number, fiveHour: number, sevenDay = 0.1): PokeHubEvent {
+    return ev({
+      seq,
+      agentId: "scout-1",
+      kind: "rate_limit.updated",
+      source: "system",
+      status: "allowed",
+      fiveHour: { utilization: fiveHour, resetsAt: FIVE_HOUR_RESET },
+      sevenDay: { utilization: sevenDay, resetsAt: SEVEN_DAY_RESET },
+    });
+  }
+
+  it("starts with no reading at all", () => {
+    const world = initialWorld();
+    expect(world.rateLimit).toBeNull();
+    expect(rateLimitBudget(world, Date.now())).toBeNull();
+  });
+
+  it("stores the reading at world level, not on the reporting agent", () => {
+    const world = reduce(initialWorld(), reading(1, 0.25));
+    expect(world.rateLimit?.fiveHour).toEqual({
+      utilization: 0.25,
+      resetsAt: FIVE_HOUR_RESET,
+    });
+    // The agent still advanced — the event really is a line in its log.
+    expect(world.agents["scout-1"]?.lastSeq).toBe(1);
+  });
+
+  it("turns utilization into the fraction LEFT and the time to reset", () => {
+    const world = reduce(initialWorld(), reading(1, 0.25));
+    const now = Date.parse("2026-08-29T13:00:00.000Z");
+    const budget = rateLimitBudget(world, now)!;
+    expect(budget.fiveHour?.fractionLeft).toBeCloseTo(0.75);
+    expect(budget.fiveHour?.resetsInMs).toBe(60 * 60 * 1000);
+    expect(budget.fiveHour?.isLow).toBe(false);
+  });
+
+  it("flags low only under the 15% line", () => {
+    const now = Date.parse("2026-08-29T13:00:00.000Z");
+    const at = (utilization: number): boolean =>
+      rateLimitBudget(reduce(initialWorld(), reading(1, utilization)), now)!.fiveHour!.isLow;
+    expect(at(0.84)).toBe(false);
+    expect(at(0.85)).toBe(false);
+    expect(at(0.9)).toBe(true);
+  });
+
+  it("never reports a negative time to reset once the window has passed", () => {
+    const world = reduce(initialWorld(), reading(1, 0.25));
+    const afterReset = FIVE_HOUR_RESET + 60_000;
+    expect(rateLimitBudget(world, afterReset)!.fiveHour?.resetsInMs).toBe(0);
+  });
+
+  it("clamps a malformed utilization into 0-1", () => {
+    const now = Date.parse("2026-08-29T13:00:00.000Z");
+    const world = reduce(initialWorld(), reading(1, 1.4));
+    expect(rateLimitBudget(world, now)!.fiveHour?.fractionLeft).toBe(0);
+  });
+
+  it("keeps the freshest reading when two agents' logs interleave out of order", () => {
+    const fresh = ev({
+      seq: 5,
+      agentId: "scout-1",
+      kind: "rate_limit.updated",
+      source: "system",
+      ts: "2026-08-29T10:05:00.000Z",
+      status: "allowed",
+      fiveHour: { utilization: 0.5, resetsAt: FIVE_HOUR_RESET },
+      sevenDay: null,
+    });
+    const stale = ev({
+      seq: 2,
+      agentId: "builder-1",
+      kind: "rate_limit.updated",
+      source: "system",
+      ts: "2026-08-29T10:01:00.000Z",
+      status: "allowed",
+      fiveHour: { utilization: 0.1, resetsAt: FIVE_HOUR_RESET },
+      sevenDay: null,
+    });
+    const world = replay([fresh, stale], initialWorld());
+    expect(world.rateLimit?.fiveHour?.utilization).toBe(0.5);
+    expect(world.rateLimit?.observedAt).toBe("2026-08-29T10:05:00.000Z");
+  });
+
+  it("carries a window the SDK did not report through as null", () => {
+    const world = reduce(
+      initialWorld(),
+      ev({
+        seq: 1,
+        agentId: "scout-1",
+        kind: "rate_limit.updated",
+        source: "system",
+        status: "rejected",
+        fiveHour: { utilization: 1, resetsAt: FIVE_HOUR_RESET },
+        sevenDay: null,
+      }),
+    );
+    const budget = rateLimitBudget(world, Date.parse("2026-08-29T13:00:00.000Z"))!;
+    expect(budget.status).toBe("rejected");
+    expect(budget.sevenDay).toBeNull();
+    expect(budget.fiveHour?.fractionLeft).toBe(0);
   });
 });
