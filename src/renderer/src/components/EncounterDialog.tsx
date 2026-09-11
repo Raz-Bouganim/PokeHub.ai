@@ -7,6 +7,8 @@
  * Not unit-tested — React render; verified live via the stub (PROGRESS.md).
  */
 
+import { useState } from "react";
+import { describeImpact, toolImpact } from "../../../core/text/tool-impact.ts";
 import type { PermissionAskEnvelope } from "../../../shared/ipc.ts";
 import type { PermissionDecision } from "../../../shared/permissions.ts";
 import styles from "./EncounterDialog.module.css";
@@ -19,15 +21,26 @@ interface EncounterDialogProps {
 }
 
 export function EncounterDialog({ ask, waiting, onAnswer }: EncounterDialogProps): JSX.Element {
+  const [inspecting, setInspecting] = useState(false);
   const { tool, agentName, title, input, canRemember } = ask.ask;
+  const impact = toolImpact(tool, input);
+
   return (
     <div className={styles.backdrop}>
       <div className={styles.dialog}>
         <h2>A wild {tool.toUpperCase()} appeared!</h2>
         <p>
-          {agentName} — {title ?? `${tool} wants to run:`}
+          {agentName} {describeImpact(impact)}
+          {impact.hiddenWrite && (
+            <span className={styles.caution}> — may also write through a redirect or eval</span>
+          )}
         </p>
-        <pre>{JSON.stringify(input, null, 2)}</pre>
+        {title && <p className={styles.title}>{title}</p>}
+        {impact.target && <pre>{impact.target}</pre>}
+        <button type="button" className={styles.inspect} onClick={() => setInspecting((v) => !v)}>
+          {inspecting ? "hide raw input" : "inspect raw input"}
+        </button>
+        {inspecting && <pre>{JSON.stringify(input, null, 2)}</pre>}
         <div className={styles.actions}>
           <button onClick={() => onAnswer("allow_once")}>Allow once</button>
           {canRemember && <button onClick={() => onAnswer("allow_always")}>Always</button>}

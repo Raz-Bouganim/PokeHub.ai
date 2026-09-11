@@ -5,51 +5,30 @@ The spec is `VISION.md`. The always-on rules are `CLAUDE.md`.
 
 ## Next up
 
-**Phase 2 — Parallel.** Phase 1 (Legibility) and Phase 1.5 (coding-standards refactor) are done
-and **merged to `main`** — PR #1, merge commit `91a8bd1` (2026-09-05). `docs/STANDARDS.md` is
-now the code-conventions authority; follow it for every change and keep `npm run check`
-(typecheck + lint `--max-warnings 0` + format:check + test) green before every commit.
-Housekeeping: the local `phase-1.5-coding-standards` branch is merged and can be deleted.
+**Phase 2 — Parallel — feature-complete, PR open.** Phase 1 (Legibility) and Phase 1.5
+(coding-standards refactor) are **merged to `main`** — PR #1, merge commit `91a8bd1`
+(2026-09-05). `docs/STANDARDS.md` is now the code-conventions authority; follow it for every
+change and keep `npm run check` (typecheck + lint `--max-warnings 0` + format:check + test)
+green before every commit. Housekeeping: the local `phase-1.5-coding-standards` branch is
+merged and can be deleted.
 
-Branch `phase-2-subagent-tethering` carries Slice 2 (2a data + 2b render), both Slice 2 loose
-ends, Slice 3 (town overview), a readability/modularity refactor, and Slice 4 (the rate-limit
-gauge). All committed; **nothing is merged to `main` yet** — the encounter dialog is the last
-thing wanted before that PR. `npm run check` (169 tests) + `npm run build` green.
+Branch `phase-2-subagent-tethering` now carries every Phase 2 slice — subagent tethering
+(2a+2b), both Slice 2 loose ends, Slice 3 (town overview), a readability/modularity refactor,
+Slice 4 (the rate-limit gauge), and the encounter dialog quantification — and has a PR open
+against `main` (see the PR description for the branch's full commit list). `npm run check`
+(184 tests) + `npm run build` green.
 
-**Slice 4 — rate-limit gauge — DONE 2026-09-11** (see Done). Committed.
+**START HERE next session:** check the PR — once it's merged, Phase 2 is done and Phase 3
+(World: character creation, real art, progression, building states, replay scrub) starts per
+VISION's build order. Until then, address review feedback on the PR rather than starting new
+Phase 3 work on top of an unmerged branch.
 
-**START HERE — the encounter dialog.** It is the last Phase 2 item, and the one thing PokeHub is
-meant to do *better* than the terminal rather than merely prettier — so it is what stands between
-this branch and a merge to `main`.
+**Encounter dialog — DONE 2026-09-11** (see Done). `core/text/tool-impact.ts` (`toolImpact` /
+`describeImpact`) replaces the old tool-name + raw-JSON dialog with a real quantified sentence,
+the bare target, an optional hidden-write caution, and an INSPECT toggle for the raw input.
 
-The 2026-09-05 QA pass found it below VISION's "killer moment" bar. Today
-`components/EncounterDialog.tsx` renders the tool name plus `JSON.stringify(input)`. VISION's
-sketch wants: the bare command on its own line, the threatened action **quantified** ("It wants to
-DELETE 214 files"), an INSPECT affordance, and which agent is asking. What to do, in order:
-1. Read `components/EncounterDialog.tsx` + `hooks/use-permission-queue.ts` and
-   `shared/permissions.ts` (`PermissionAsk` already carries `agentId` / `agentName` / `tool` /
-   `input` / `title` — the identity half may need no new plumbing, check before adding any).
-2. Decide what "quantified" can honestly be. The count must be REAL (rule one) — for `Bash` it is
-   parsing the command, for `Edit`/`Write` the path. `core/text/tool-labels.ts` (`toolTarget`)
-   and `core/agent-class/bash-guard.ts` (`bashSegments`, `WRITE_SMELLS`) already parse Bash;
-   reuse them rather than writing a third parser. If a number can't be derived honestly, show no
-   number — never an estimate dressed as a fact.
-3. Keep the decision plumbing as-is (`canUseTool` → the queue → `resolvePermission`); this is a
-   presentation change, and VISION says so explicitly.
-4. Verify with the stub's `window.__ask(ask)` helper (see Gotchas) across Bash / Edit / a refusal.
-
-**Both Slice 2 loose ends — RESOLVED 2026-09-08 (see Done):** #1 Builder-only `Task`/`Agent`;
-#2 subagent-permission attribution via `agent/tool-call-owners.ts`. The `session.ts` wiring for
-#2 still wants a real `npm run spike` subagent run to confirm the asker resolves end-to-end
-(the renderer/reducer half is live-verified).
-
-**Slice 3 — town overview — DONE 2026-09-08.** `core/town.ts` `townBuildings()` groups agents
-by `cwd`; `hooks/use-map-zoom.ts` owns the town↔building zoom; `MapPanel` → `TownView` →
-`BuildingCard` → `StatusDot` (plain DOM); `WorldMap.tsx` split into `components/world-map/*`
-with a `focusedProject` filter. Single-project worlds skip the town (no regression).
-
-Then, in rough priority order:
-- **Map identity ring is thin / buried** (same QA pass): the per-agent accent ring in
+Once Phase 2 merges, in rough priority order:
+- **Map identity ring is thin / buried** (2026-09-05 QA pass): the per-agent accent ring in
   `components/world-map/sprite.ts` (1.5px, `r+2`) is drowned by the status ring (`r+4`) +
   selection ring (`r+7`), and vanishes on `exited` agents (container alpha 0.4). Needs an
   art-direction call — defer to Phase 3 unless it bites sooner.
@@ -108,9 +87,34 @@ Reference notes (paths as of the Phase 1.5 refactor — see Done 2026-09-05):
 
 ## Done
 
+- **2026-09-11** — **The encounter dialog — Phase 2's last item.** `npm run check` (184 tests,
+  was 169) + `npm run build` green. Committed on `phase-2-subagent-tethering`.
+  - New `core/text/tool-impact.ts`, pure and unit-tested (15 tests): `toolImpact(toolName,
+    rawInput)` derives a real verb + target + optional count from the raw input alone, never an
+    estimate — line counts for `Write`/`Edit` content, literal `rm`/`rmdir` argument counts
+    (bailing to no count the moment any argument could be a glob, `$var`, or backtick
+    substitution), a chained-command count for anything else, and a `hiddenWrite` flag off a
+    reused `WRITE_SMELLS` hit. `describeImpact()` turns that into the dialog's sentence
+    ("wants to delete 3 named targets"), pluralized, never fabricating a number.
+  - `EncounterDialog.tsx`: the agent's name + quantified sentence, the bare real target (full
+    command or path, not truncated), an optional caution line on a hidden-write hit, and an
+    "inspect raw input" toggle replacing the old always-on `JSON.stringify(input)` dump.
+  - Live-verified in Chrome via the throwaway stub (see Gotchas) across Bash (`rm -rf ./dist &&
+    yarn build --force` → "delete 1 named target"), Edit (3-line replace), a hidden-write Bash
+    command, Write (4-line create), the inspect toggle, and a refusal — all correct, console
+    clean, stub deleted afterward.
+  - A `/standards-review` pass caught and fixed two real issues in the new module before this
+    was reported done: the file header cited "VISION" by name (CLAUDE.md §1 bans referencing
+    project docs from comments) and `ToolImpact`'s fields weren't `readonly` (STANDARDS §4 —
+    `core/` types must be deeply readonly).
+  - The user asked for a further comment pass after that: several field/function comments
+    restated what the name and type already said (`verb`, `count`, `describeImpact`'s whole
+    body) and were cut; `toolImpact`'s two parameters were renamed `toolName` / `rawInput` so
+    neither needs a `@param` line, leaving the docblock as a purpose sentence + `@returns`.
+
 - **2026-09-11** — **Phase 2 Slice 4: the visible rate-limit / budget gauge.** VISION's PP/Money
-  row, end to end. `npm run check` (169 tests, was 152) + `npm run build` green. Uncommitted on
-  `phase-2-subagent-tethering`.
+  row, end to end. `npm run check` (169 tests, was 152) + `npm run build` green. Committed
+  (`f74b639`) on `phase-2-subagent-tethering`.
   - **Shape confirmed against a real run first, and the plan in this file was half wrong.** The
     published `.d.ts` types `SDKRateLimitInfo` as flat (`status` / `utilization` / `resetsAt` /
     `rateLimitType`) with no `unifiedWindows` at all — but a real `rate_limit_event` frame DOES
@@ -391,6 +395,12 @@ Reference notes (paths as of the Phase 1.5 refactor — see Done 2026-09-05):
 
 ## Decisions
 
+- **2026-09-11** — **The encounter dialog's quantification never touches the filesystem** — no
+  glob expansion, no `fs.readdir` walk to turn `rm -rf ./dist` into a real "214 files" count.
+  `toolImpact` derives its count from the raw input text alone (line counts, literal `rm`
+  arguments, segment counts); anything that would need resolving a pattern against disk shows no
+  number instead of a guess. Keeps the parser pure and testable in `core/` with zero I/O risk;
+  revisit only if the no-count case turns out to be the common one in practice.
 - **2026-09-11** — **The rate-limit budget is world-level state, not per-agent.** It is the
   account's number; every session reports the same one. `WorldState.rateLimit` holds the latest
   and `rate_limit.updated` is the first event that folds into the world rather than an agent (the
