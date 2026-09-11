@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { PokeHubEvent } from "../events.ts";
 import { parseLog } from "../log.ts";
 import { reduce, replay } from "../reducer.ts";
-import { isStalled, needsAttention } from "../selectors.ts";
+import { isStalled, needsAttention, rateLimitBudget, subagentsOf } from "../selectors.ts";
 import { initialWorld, TRANSCRIPT_LIMIT } from "../world.ts";
 
 const fixture = fileURLToPath(
@@ -414,6 +414,108 @@ describe("reducer — a finished agent stays finished", () => {
     );
     expect(world.agents["Z"]!.status).toBe("exited");
     expect(world.agents["Z"]!.thought).toBeNull();
+  });
+});
+
+describe("reducer — subagent tethering", () => {
+  const parentSpawn = ev({
+    seq: 1,
+    agentId: "P",
+    kind: "agent.spawned",
+    name: "Pat",
+    agentClass: "Builder",
+    cwd: "/repo",
+  });
+  const childSpawn = ev({
+    seq: 2,
+    agentId: "sub-toolu_1",
+    kind: "agent.spawned",
+    name: "Count files",
+    agentClass: "general-purpose",
+    cwd: "/repo",
+    parentAgentId: "P",
+  });
+
+  it("records parentAgentId on the child and null on a composer agent", () => {
+    const world = replay([parentSpawn, childSpawn], initialWorld());
+    expect(world.agents["P"]!.parentAgentId).toBeNull();
+    expect(world.agents["sub-toolu_1"]!.parentAgentId).toBe("P");
+  });
+
+  it("subagentsOf finds the tethered children, not the parent itself", () => {
+    const world = replay([parentSpawn, childSpawn], initialWorld());
+    expect(subagentsOf(world, "P").map((a) => a.id)).toEqual(["sub-toolu_1"]);
+    expect(subagentsOf(world, "sub-toolu_1")).toEqual([]);
+  });
+
+  it("a child tool call places the child sprite, leaving the parent put", () => {
+    const world = replay(
+      [
+        parentSpawn,
+        childSpawn,
+        ev({
+          seq: 3,
+          agentId: "sub-toolu_1",
+          kind: "tool.started",
+          toolCallId: "c1",
+          tool: "Grep",
+          input: { pattern: "x" },
+        }),
+      ],
+      initialWorld(),
+    );
+    expect(world.agents["sub-toolu_1"]!.location).toBe("library");
+    expect(world.agents["sub-toolu_1"]!.status).toBe("working");
+    expect(world.agents["P"]!.location).toBe("route");
+  });
+
+  it("tolerates the child's agent.spawned arriving AFTER its first tool call", () => {
+    // Partial-log replay / snapshot+live overlap: a blank child agent is created
+    // by the out-of-order tool call and has already progressed. The late spawn
+    // fills in identity without yanking it back to spawning/route.
+    const world = replay(
+      [
+        parentSpawn,
+        ev({
+          seq: 3,
+          agentId: "sub-toolu_1",
+          kind: "tool.started",
+          toolCallId: "c1",
+          tool: "Edit",
+          input: { file_path: "/repo/a.ts" },
+        }),
+        { ...childSpawn, seq: 4 } as PokeHubEvent,
+      ],
+      initialWorld(),
+    );
+    const child = world.agents["sub-toolu_1"]!;
+    expect(child.name).toBe("Count files");
+    expect(child.parentAgentId).toBe("P");
+    expect(child.status).toBe("working");
+    expect(child.location).toBe("forge");
+  });
+
+  it("drops an agent.exited for an agent that was never spawned (phantom task)", () => {
+    // task_notification fires for backgrounded Bash too; translate can't tell
+    // those apart, so the reducer must not conjure a phantom exited sprite.
+    const world = replay(
+      [parentSpawn, ev({ seq: 2, agentId: "sub-bg-bash", kind: "agent.exited", code: 0 })],
+      initialWorld(),
+    );
+    expect(Object.keys(world.agents)).toEqual(["P"]);
+  });
+
+  it("exits the child on its own agent.exited (from task_notification)", () => {
+    const world = replay(
+      [
+        parentSpawn,
+        childSpawn,
+        ev({ seq: 3, agentId: "sub-toolu_1", kind: "agent.exited", code: 0 }),
+      ],
+      initialWorld(),
+    );
+    expect(world.agents["sub-toolu_1"]!.status).toBe("exited");
+    expect(world.agents["P"]!.status).not.toBe("exited");
   });
 });
 
@@ -1223,5 +1325,114 @@ describe("selectors — time lives here, not in the reducer", () => {
     const world = replay(events.slice(0, 6), initialWorld());
     const now = Date.parse("2026-08-29T10:15:00.000Z");
     expect(isStalled(world.agents["scout-1"]!, now)).toBe(true);
+  });
+});
+
+describe("reducer + selectors — the plan rate-limit budget", () => {
+  const FIVE_HOUR_RESET = Date.parse("2026-08-29T14:00:00.000Z");
+  const SEVEN_DAY_RESET = Date.parse("2026-09-03T00:00:00.000Z");
+
+  /** As `translate` emits it: windows in epoch ms, `fiveHour` a 0-1 fraction. */
+  function reading(seq: number, fiveHour: number, sevenDay = 0.1): PokeHubEvent {
+    return ev({
+      seq,
+      agentId: "scout-1",
+      kind: "rate_limit.updated",
+      source: "system",
+      status: "allowed",
+      fiveHour: { utilization: fiveHour, resetsAt: FIVE_HOUR_RESET },
+      sevenDay: { utilization: sevenDay, resetsAt: SEVEN_DAY_RESET },
+    });
+  }
+
+  it("starts with no reading at all", () => {
+    const world = initialWorld();
+    expect(world.rateLimit).toBeNull();
+    expect(rateLimitBudget(world, Date.now())).toBeNull();
+  });
+
+  it("stores the reading at world level, not on the reporting agent", () => {
+    const world = reduce(initialWorld(), reading(1, 0.25));
+    expect(world.rateLimit?.fiveHour).toEqual({
+      utilization: 0.25,
+      resetsAt: FIVE_HOUR_RESET,
+    });
+    // The agent still advanced — the event really is a line in its log.
+    expect(world.agents["scout-1"]?.lastSeq).toBe(1);
+  });
+
+  it("turns utilization into the fraction LEFT and the time to reset", () => {
+    const world = reduce(initialWorld(), reading(1, 0.25));
+    const now = Date.parse("2026-08-29T13:00:00.000Z");
+    const budget = rateLimitBudget(world, now)!;
+    expect(budget.fiveHour?.fractionLeft).toBeCloseTo(0.75);
+    expect(budget.fiveHour?.resetsInMs).toBe(60 * 60 * 1000);
+    expect(budget.fiveHour?.isLow).toBe(false);
+  });
+
+  it("flags low only under the 15% line", () => {
+    const now = Date.parse("2026-08-29T13:00:00.000Z");
+    const at = (utilization: number): boolean =>
+      rateLimitBudget(reduce(initialWorld(), reading(1, utilization)), now)!.fiveHour!.isLow;
+    expect(at(0.84)).toBe(false);
+    expect(at(0.85)).toBe(false);
+    expect(at(0.9)).toBe(true);
+  });
+
+  it("never reports a negative time to reset once the window has passed", () => {
+    const world = reduce(initialWorld(), reading(1, 0.25));
+    const afterReset = FIVE_HOUR_RESET + 60_000;
+    expect(rateLimitBudget(world, afterReset)!.fiveHour?.resetsInMs).toBe(0);
+  });
+
+  it("clamps a malformed utilization into 0-1", () => {
+    const now = Date.parse("2026-08-29T13:00:00.000Z");
+    const world = reduce(initialWorld(), reading(1, 1.4));
+    expect(rateLimitBudget(world, now)!.fiveHour?.fractionLeft).toBe(0);
+  });
+
+  it("keeps the freshest reading when two agents' logs interleave out of order", () => {
+    const fresh = ev({
+      seq: 5,
+      agentId: "scout-1",
+      kind: "rate_limit.updated",
+      source: "system",
+      ts: "2026-08-29T10:05:00.000Z",
+      status: "allowed",
+      fiveHour: { utilization: 0.5, resetsAt: FIVE_HOUR_RESET },
+      sevenDay: null,
+    });
+    const stale = ev({
+      seq: 2,
+      agentId: "builder-1",
+      kind: "rate_limit.updated",
+      source: "system",
+      ts: "2026-08-29T10:01:00.000Z",
+      status: "allowed",
+      fiveHour: { utilization: 0.1, resetsAt: FIVE_HOUR_RESET },
+      sevenDay: null,
+    });
+    const world = replay([fresh, stale], initialWorld());
+    expect(world.rateLimit?.fiveHour?.utilization).toBe(0.5);
+    expect(world.rateLimit?.observedAt).toBe("2026-08-29T10:05:00.000Z");
+  });
+
+  it("carries a window the SDK did not report through as null", () => {
+    const world = reduce(
+      initialWorld(),
+      ev({
+        seq: 1,
+        agentId: "scout-1",
+        kind: "rate_limit.updated",
+        source: "system",
+        status: "rejected",
+        fiveHour: { utilization: 1, resetsAt: FIVE_HOUR_RESET },
+        sevenDay: null,
+      }),
+    );
+    const budget = rateLimitBudget(world, Date.parse("2026-08-29T13:00:00.000Z"))!;
+    expect(budget.status).toBe("rejected");
+    expect(budget.sevenDay).toBeNull();
+    expect(budget.fiveHour?.fractionLeft).toBe(0);
   });
 });

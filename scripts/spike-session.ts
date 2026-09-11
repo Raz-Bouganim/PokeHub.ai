@@ -45,10 +45,13 @@ const handle = spawnAgent({
   logPath,
   onEvent: (event) => {
     world = reduce(world, event);
-    const a = agentList(world)[0];
+    // Print the agent THIS event is about — with subagents, that isn't always
+    // the root: a `sub-…` id means a tethered child.
+    const a = world.agents[event.agentId];
+    const who = a && agentList(world).length > 1 ? ` ${a.id}` : "";
     console.log(
       `#${String(event.seq).padStart(3, "0")} ${event.kind.padEnd(22)} ` +
-        (a ? `${a.location.padEnd(8)} ${a.status}` : ""),
+        (a ? `${a.location.padEnd(8)} ${a.status.padEnd(9)}${who}` : ""),
     );
     // One-shot: the spike proves the pipe for a single turn. The agent now goes
     // `idle` (session resumable) rather than exiting, so end it explicitly.

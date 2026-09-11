@@ -10,9 +10,11 @@
  * The reducer returns a new WorldState; it never mutates its input. It is
  * tolerant of events it does not recognise (returns state unchanged) so that
  * repo/CI/system events added later cannot crash replay of old logs.
+ *
+ * `rate_limit.updated` folds into the world, not an agent — the budget is account-wide.
  */
 
-import type { PokeHubEvent } from "./events.ts";
+import type { PokeHubEvent, RateLimitUpdatedEvent } from "./events.ts";
 import { roomForTool } from "./rooms.ts";
 import { bubbleLine } from "./text/bubble-line.ts";
 import { toolKind, toolTarget } from "./text/tool-labels.ts";
@@ -21,6 +23,7 @@ import {
   TRANSCRIPT_LIMIT,
   type AgentState,
   type JournalEntry,
+  type RateLimitState,
   type RecentTool,
   type TranscriptEntry,
   type WorldState,
@@ -61,6 +64,7 @@ function blankAgent(id: string): AgentState {
     agentClass: "unknown",
     cwd: "",
     sessionId: null,
+    parentAgentId: null,
     location: "route",
     status: "spawning",
     thought: null,
@@ -90,6 +94,7 @@ function blankAgent(id: string): AgentState {
  *          event was a duplicate or changed nothing, otherwise a new object
  */
 export function reduce(state: WorldState, event: PokeHubEvent): WorldState {
+  const known = event.agentId in state.agents;
   const prev = state.agents[event.agentId] ?? blankAgent(event.agentId);
 
   // Idempotent replay. De-dup keys off the PER-AGENT counter, never a single
@@ -97,13 +102,36 @@ export function reduce(state: WorldState, event: PokeHubEvent): WorldState {
   // a global gate silently drops the second agent's whole stream.
   if (event.seq <= prev.lastSeq) return state;
 
+  // You can't exit an agent that was never spawned. `system/task_notification`
+  // fires for backgrounded Bash and workflow tasks too — not just subagents —
+  // and carries no `task_type` to tell them apart, so `translate` mints a
+  // `sub-<id>` exit for all of them; this drops the ones that never became a
+  // sprite rather than leaving a phantom exited agent on the map.
+  if (!known && event.kind === "agent.exited") return state;
+
   const agent = applyToAgent(prev, event);
 
-  return {
+  const next: WorldState = {
     ...state,
     maxSeqSeen: Math.max(state.maxSeqSeen, event.seq),
     agents: { ...state.agents, [event.agentId]: agent },
   };
+
+  if (event.kind !== "rate_limit.updated") return next;
+  return { ...next, rateLimit: freshestReading(state, event) };
+}
+
+/** Keeps whichever reading is newer by event `ts`. N agents report the same
+ *  budget, so readings interleave and can arrive out of order. */
+function freshestReading(state: WorldState, event: RateLimitUpdatedEvent): RateLimitState {
+  const incoming: RateLimitState = {
+    status: event.status,
+    fiveHour: event.fiveHour,
+    sevenDay: event.sevenDay,
+    observedAt: event.ts,
+  };
+  const held = state.rateLimit;
+  return held && held.observedAt > incoming.observedAt ? held : incoming;
 }
 
 function applyToAgent(prev: AgentState, event: PokeHubEvent): AgentState {
@@ -120,15 +148,24 @@ function applyToAgent(prev: AgentState, event: PokeHubEvent): AgentState {
   if (prev.status === "exited") return base;
 
   switch (event.kind) {
-    case "agent.spawned":
+    case "agent.spawned": {
+      // A subagent's `agent.spawned` (from `task_started`) normally arrives
+      // before any of its own events — but a partial-log replay or a
+      // snapshot+live overlap can deliver a child tool call first, creating a
+      // blank agent that has already progressed. Only reset to spawning/route
+      // when this really is the agent's first event; otherwise keep the
+      // identity fields and leave the live status alone.
+      const fresh = prev.lastSeq === 0;
       return {
         ...base,
         name: event.name,
         agentClass: event.agentClass,
         cwd: event.cwd,
-        status: "spawning",
-        location: "route",
+        parentAgentId: event.parentAgentId ?? prev.parentAgentId,
+        status: fresh ? "spawning" : prev.status,
+        location: fresh ? "route" : prev.location,
       };
+    }
 
     case "agent.session_started":
       return { ...base, sessionId: event.sessionId };

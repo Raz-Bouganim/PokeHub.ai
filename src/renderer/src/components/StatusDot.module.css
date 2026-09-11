@@ -1,0 +1,16 @@
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.clickable {
+  cursor: pointer;
+}
+
+.selected {
+  outline: 2px solid var(--fg);
+  outline-offset: 1px;
+}

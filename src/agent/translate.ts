@@ -7,9 +7,15 @@
  *
  * Pairing of started/finished tool calls is NOT done here — the reducer pairs by
  * `toolCallId`, so translation can stay stateless.
+ *
+ * Subagents ride the same stream: a message with `parent_tool_use_id` set is
+ * attributed to a child sprite whose id is minted deterministically from that
+ * tool-use id (`subAgentId`), so this stays stateless. `system/task_started`
+ * spawns the child (with `parentAgentId` = the root), `system/task_notification`
+ * exits it.
  */
 
-import type { PokeHubEvent } from "../core/events.ts";
+import type { PokeHubEvent, RateLimitStatus, RateLimitWindow } from "../core/events.ts";
 import { bubbleLine } from "../core/text/bubble-line.ts";
 import { summarizeToolOutput } from "../core/text/summarize-tool-output.ts";
 
@@ -37,11 +43,36 @@ interface SdkMessageLike {
   message?: { content?: ContentBlock[] | string };
   is_error?: boolean;
   compact_metadata?: { trigger?: string };
-  /** The tool's full structured Output object (per-tool shape), sibling to the
-   *  `tool_result` content block it answers — see `summarizeToolOutput`. Only
-   *  meaningful when `message.content` holds exactly one `tool_result` block;
-   *  the SDK does not batch several into one user message today. */
+  parent_tool_use_id?: string | null;
+  tool_use_id?: string;
+  task_type?: string;
+  description?: string;
+  subagent_type?: string;
+  prompt?: string;
+  status?: string;
   tool_use_result?: unknown;
+  /** Hand-narrowed: the published `.d.ts` omits `unifiedWindows`, which real runs send. */
+  rate_limit_info?: {
+    status?: string;
+    unifiedWindows?: Record<string, { utilization?: number; resetsAt?: number } | null>;
+  };
+}
+
+const RATE_LIMIT_STATUSES: readonly RateLimitStatus[] = ["allowed", "allowed_warning", "rejected"];
+
+/** Unknown values read as `allowed` — an uninterpretable status must not make
+ *  the gauge claim the budget is spent. */
+function rateLimitStatus(raw: string | undefined): RateLimitStatus {
+  return RATE_LIMIT_STATUSES.find((s) => s === raw) ?? "allowed";
+}
+
+/** `null` when the SDK omitted the window or sent it half-filled.
+ *  `resetsAt` arrives in epoch seconds; downstream is milliseconds. */
+function rateLimitWindow(
+  raw: { utilization?: number; resetsAt?: number } | null | undefined,
+): RateLimitWindow | null {
+  if (!raw || typeof raw.utilization !== "number" || typeof raw.resetsAt !== "number") return null;
+  return { utilization: raw.utilization, resetsAt: raw.resetsAt * 1000 };
 }
 
 function contentBlocks(msg: SdkMessageLike): ContentBlock[] {
@@ -49,15 +80,34 @@ function contentBlocks(msg: SdkMessageLike): ContentBlock[] {
   return Array.isArray(c) ? c : [];
 }
 
+/** PokeHub id for a subagent, derived from the `Agent`/`Task` tool-use id that
+ *  started it. Deterministic and stateless: the same id appears on `task_started`
+ *  (as `tool_use_id`), on every subagent message (as `parent_tool_use_id`), and
+ *  on `task_notification` — so translate never has to remember a mapping. */
+function subAgentId(toolUseId: string): string {
+  return `sub-${toolUseId}`;
+}
+
 /**
  * @param raw       a message yielded by the SDK `query()` async iterator
- * @param agentId   PokeHub's stable id for this sprite
+ * @param agentId   PokeHub's stable id for the session-root sprite
  * @param sessionId last-known session id (used until the SDK reports one)
+ * @param cwd       the root agent's working directory — inherited by any
+ *                  subagent, which the SDK does not restate
  */
-export function translate(raw: unknown, agentId: string, sessionId: string | null): EventDraft[] {
+export function translate(
+  raw: unknown,
+  agentId: string,
+  sessionId: string | null,
+  cwd = "",
+): EventDraft[] {
   const msg = raw as SdkMessageLike;
   if (!msg || typeof msg.type !== "string") return [];
   const sid = msg.session_id ?? sessionId;
+  // A message tagged with `parent_tool_use_id` was produced inside a subagent;
+  // every event it yields belongs to that child sprite, not the root.
+  const owner =
+    typeof msg.parent_tool_use_id === "string" ? subAgentId(msg.parent_tool_use_id) : agentId;
   const drafts: EventDraft[] = [];
 
   switch (msg.type) {
@@ -79,6 +129,52 @@ export function translate(raw: unknown, agentId: string, sessionId: string | nul
           ...(msg.compact_metadata?.trigger ? { trigger: msg.compact_metadata.trigger } : {}),
         });
       }
+      // A subagent was dispatched: mint the child sprite and hand it the task
+      // prompt. `task_started` fires before any of the child's own messages, so
+      // the parent link is always known by the time the child does anything.
+      // `task_type` gates out the other things that emit `task_started` — a
+      // backgrounded Bash (`local_bash`), an ultracode run (`local_workflow`).
+      if (
+        msg.subtype === "task_started" &&
+        msg.task_type === "local_agent" &&
+        typeof msg.tool_use_id === "string"
+      ) {
+        const child = subAgentId(msg.tool_use_id);
+        const label = msg.description?.trim();
+        drafts.push({
+          kind: "agent.spawned",
+          source: "agent",
+          agentId: child,
+          sessionId: sid,
+          name: label && label.length > 0 ? label : "subagent",
+          agentClass: msg.subagent_type ?? "subagent",
+          cwd,
+          parentAgentId: agentId,
+        });
+        if (msg.prompt?.trim()) {
+          drafts.push({
+            kind: "agent.prompt",
+            source: "user",
+            agentId: child,
+            sessionId: sid,
+            text: msg.prompt.trim(),
+          });
+        }
+      }
+      // The subagent settled. `task_notification` is the frame that carries both
+      // `tool_use_id` (to key the child) and a terminal `status`.
+      if (msg.subtype === "task_notification" && typeof msg.tool_use_id === "string") {
+        const child = subAgentId(msg.tool_use_id);
+        const failed = msg.status === "failed" || msg.status === "stopped";
+        drafts.push({
+          kind: "agent.exited",
+          source: "agent",
+          agentId: child,
+          sessionId: sid,
+          code: failed ? 1 : 0,
+          ...(failed ? { reason: msg.status } : {}),
+        });
+      }
       break;
     }
 
@@ -88,7 +184,7 @@ export function translate(raw: unknown, agentId: string, sessionId: string | nul
           drafts.push({
             kind: "agent.thinking",
             source: "agent",
-            agentId,
+            agentId: owner,
             sessionId: sid,
             thought: bubbleLine(block.thinking),
             channel: "reasoning",
@@ -102,7 +198,7 @@ export function translate(raw: unknown, agentId: string, sessionId: string | nul
           drafts.push({
             kind: "agent.message",
             source: "agent",
-            agentId,
+            agentId: owner,
             sessionId: sid,
             text: block.text.trim(),
           });
@@ -111,7 +207,7 @@ export function translate(raw: unknown, agentId: string, sessionId: string | nul
           drafts.push({
             kind: "tool.started",
             source: "agent",
-            agentId,
+            agentId: owner,
             sessionId: sid,
             toolCallId: block.id,
             tool: block.name,
@@ -137,7 +233,7 @@ export function translate(raw: unknown, agentId: string, sessionId: string | nul
           drafts.push({
             kind: "tool.finished",
             source: "agent",
-            agentId,
+            agentId: owner,
             sessionId: sid,
             toolCallId: block.tool_use_id,
             ok: block.is_error !== true,
@@ -145,6 +241,22 @@ export function translate(raw: unknown, agentId: string, sessionId: string | nul
           });
         }
       }
+      break;
+    }
+
+    // Account-wide, so it attaches to the session root even mid-subagent.
+    case "rate_limit_event": {
+      const info = msg.rate_limit_info;
+      if (!info) break;
+      drafts.push({
+        kind: "rate_limit.updated",
+        source: "system",
+        agentId,
+        sessionId: sid,
+        status: rateLimitStatus(info.status),
+        fiveHour: rateLimitWindow(info.unifiedWindows?.["five_hour"]),
+        sevenDay: rateLimitWindow(info.unifiedWindows?.["seven_day"]),
+      });
       break;
     }
 

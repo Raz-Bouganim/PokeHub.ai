@@ -1,22 +1,18 @@
-/**
- * The app shell. Owns only the selected-agent id; every panel is its own
- * component and the composer/permission logic lives in hooks. Reads world state
- * from `useWorld` and lays out the four regions: composer, map + agent list,
- * focus + raw log, and the encounter modal on top.
- *
- * Not unit-tested — React render; verified live via the stub (PROGRESS.md).
- */
+// The app shell: owns the selected-agent id and lays out the four regions —
+// composer, map + agent list, focus + raw log, and the encounter modal. Every
+// panel is its own component; composer/permission/zoom logic lives in hooks.
+// Not unit-tested — verified live via the stub (PROGRESS.md).
 
 import { useState } from "react";
 import { agentList } from "../../core/selectors.ts";
 import styles from "./App.module.css";
 import { AgentFocus } from "./components/AgentFocus.tsx";
 import { AgentList } from "./components/AgentList.tsx";
+import { BudgetGauge } from "./components/BudgetGauge.tsx";
 import { Composer } from "./components/Composer.tsx";
 import { EncounterDialog } from "./components/EncounterDialog.tsx";
+import { MapPanel } from "./components/MapPanel.tsx";
 import { RawLog } from "./components/RawLog.tsx";
-import { WorldMap } from "./components/WorldMap.tsx";
-import { cx } from "./cx.ts";
 import { useComposer } from "./hooks/use-composer.ts";
 import { usePermissionQueue } from "./hooks/use-permission-queue.ts";
 import { useWorld } from "./hooks/use-world.ts";
@@ -34,10 +30,8 @@ export function App(): JSX.Element {
       <Composer composer={composer} showNewButton={selectedId !== null} />
 
       <div className={styles.left}>
-        <div className={cx("panel", styles.mapPanel)}>
-          <h2>Map</h2>
-          <WorldMap world={world} selectedId={selectedId} onSelect={setSelectedId} />
-        </div>
+        <BudgetGauge world={world} />
+        <MapPanel world={world} selectedId={selectedId} onSelect={setSelectedId} />
         <AgentList
           agents={agentList(world)}
           maxSeqSeen={world.maxSeqSeen}

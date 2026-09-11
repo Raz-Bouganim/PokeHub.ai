@@ -5,43 +5,33 @@ The spec is `VISION.md`. The always-on rules are `CLAUDE.md`.
 
 ## Next up
 
-**Phase 2 — Parallel.** Phase 1 (Legibility) and Phase 1.5 (coding-standards refactor) are done
-and **merged to `main`** — PR #1, merge commit `91a8bd1` (2026-09-05). `docs/STANDARDS.md` is
-now the code-conventions authority; follow it for every change and keep `npm run check`
-(typecheck + lint `--max-warnings 0` + format:check + test) green before every commit.
-Housekeeping: the local `phase-1.5-coding-standards` branch is merged and can be deleted.
+**Phase 2 — Parallel — feature-complete, PR open.** Phase 1 (Legibility) and Phase 1.5
+(coding-standards refactor) are **merged to `main`** — PR #1, merge commit `91a8bd1`
+(2026-09-05). `docs/STANDARDS.md` is now the code-conventions authority; follow it for every
+change and keep `npm run check` (typecheck + lint `--max-warnings 0` + format:check + test)
+green before every commit. Housekeeping: the local `phase-1.5-coding-standards` branch is
+merged and can be deleted.
 
-Slice 1 (multi-agent map legibility) done 2026-09-05 (see Done). Remaining slices, in order:
+Branch `phase-2-subagent-tethering` now carries every Phase 2 slice — subagent tethering
+(2a+2b), both Slice 2 loose ends, Slice 3 (town overview), a readability/modularity refactor,
+Slice 4 (the rate-limit gauge), and the encounter dialog quantification — and has a PR open
+against `main` (see the PR description for the branch's full commit list). `npm run check`
+(184 tests) + `npm run build` green.
 
-**Start here — Slice 2: subagent tethering.** Make nesting visible instead of inferred from
-transcript indentation. A one-off subagent should render tethered to (and following) its parent
-sprite. Concretely: (a) `src/agent/translate.ts` needs to emit a parent→child link when the SDK
-dispatches a `Task` tool call — the `Task` tool-use carries the subagent prompt. Find where
-translate sees `Task` and thread a `parentAgentId` through. **First verify how the SDK actually
-surfaces subagent activity** — likely the *same* `query()` stream tagged with
-`parent_tool_use_id`, not a separate session id as this note originally assumed. Spike it with a
-throwaway `scripts/_dump-task.mjs` before designing the event. (b) The event schema (`src/core/events.ts`) needs the parent id on
-`agent.spawned` (or a new `agent.tethered` event — decide based on whether the parent is known
-at spawn time). (c) The reducer (`src/core/reducer.ts`) stores it on `AgentState`. (d)
-`src/renderer/src/components/WorldMap.tsx` draws a line from child to parent and offsets the
-child's cell position toward the parent. Watch: a subagent's `agent.spawned` may arrive before or after the parent's `Task`
-`tool.started` — the reducer must tolerate either order (same lesson as the follow-up feature's
-out-of-order replay guard).
+**START HERE next session:** check the PR — once it's merged, Phase 2 is done and Phase 3
+(World: character creation, real art, progression, building states, replay scrub) starts per
+VISION's build order. Until then, address review feedback on the PR rather than starting new
+Phase 3 work on top of an unmerged branch.
 
-Then: (3) town overview as a new zoom level (every project a building, agents as dots — the
-"am I done?" zoom); (4) visible rate-limit / budget gauge (PP/Money in VISION's glance table).
-Confirm scope with the user before building each.
+**Encounter dialog — DONE 2026-09-11** (see Done). `core/text/tool-impact.ts` (`toolImpact` /
+`describeImpact`) replaces the old tool-name + raw-JSON dialog with a real quantified sentence,
+the bare target, an optional hidden-write caution, and an INSPECT toggle for the raw input.
 
-Then, in rough priority order:
-- **Encounter dialog is below VISION's "killer moment" bar** (found in the 2026-09-05 QA pass):
-  it shows the tool name + `JSON.stringify(input)`, not the bare command with the threatened
-  action quantified ("wants to DELETE 214 files") and no INSPECT button, no agent identity.
-  `components/EncounterDialog.tsx`. Its own small task — the mechanic's whole justification is
-  the risk-surfacing.
-- **Map identity ring is thin / buried** (same QA pass): the per-agent accent ring in
-  `WorldMap.tsx` (1.5px, radius 11) is drowned by the status ring (radius 13) + selection ring
-  (radius 16), and vanishes on `exited` agents (container alpha 0.4). Needs an art-direction
-  call — defer to Phase 3 unless it bites sooner.
+Once Phase 2 merges, in rough priority order:
+- **Map identity ring is thin / buried** (2026-09-05 QA pass): the per-agent accent ring in
+  `components/world-map/sprite.ts` (1.5px, `r+2`) is drowned by the status ring (`r+4`) +
+  selection ring (`r+7`), and vanishes on `exited` agents (container alpha 0.4). Needs an
+  art-direction call — defer to Phase 3 unless it bites sooner.
 - Swap the hand-rolled `Markdown.tsx` for `react-markdown` **only if** the transcript becomes
   central and the mini-renderer's gaps (nested lists, task lists) start to bite. Not now.
 - UI refactor / real art is **Phase 3**, not now — acknowledged and deferred on purpose.
@@ -52,13 +42,20 @@ Reference notes (paths as of the Phase 1.5 refactor — see Done 2026-09-05):
   typecheck + lint (`--max-warnings 0`) + format:check + test; run before every commit.
   `npm run lint:fix` / `npm run format` autofix. `eslint.config.js` carries the import-boundary
   table and a few tuned rules (comments explain each).
-- The renderer is `src/renderer/src/`: `App.tsx` (thin shell) + `components/` (WorldMap,
-  AgentFocus, Markdown, Composer, AgentList, RawLog, EncounterDialog, AgentDot — each with a
-  co-located `*.module.css`) + `hooks/` (use-world, use-composer, use-permission-queue) +
-  `styles/global.css` (tokens + shared `.panel`/`.room`/`.status-*`, imported **before** any
-  component module in `main.tsx` so modules can override). The map (`components/WorldMap.tsx`)
-  is a panel *beside* the text world view. `cx.ts` joins class names (CSS Module lookups are
-  `string | undefined`).
+- The renderer is `src/renderer/src/`: `App.tsx` (thin shell) + `components/` (MapPanel,
+  WorldMap + `world-map/` render helpers, TownView + BuildingCard + StatusDot, AgentFocus,
+  Markdown, Composer, AgentList, RawLog, EncounterDialog, AgentDot — each `.tsx` with a
+  co-located `*.module.css`) + `hooks/` (use-world, use-composer, use-permission-queue,
+  use-map-zoom) + `styles/global.css` (tokens + shared `.panel`/`.room`/`.status-*`, imported
+  **before** any component module in `main.tsx` so modules can override). `MapPanel` is the map
+  panel beside the text world view: `use-map-zoom.ts` picks the "town" zoom (`TownView`, plain
+  DOM) or the "building" zoom (`WorldMap`, Pixi — `focusedProject` filters to one project).
+  `cx.ts` joins class names (CSS Module lookups are `string | undefined`).
+- `WorldMap.tsx` is only the Pixi lifecycle; the drawing lives in `components/world-map/`:
+  `geometry.ts` (pure layout maths + room data), `sprite.ts` (one sprite), `rooms.ts`,
+  `render-agents.ts` (the layout loop + tethers).
+- Town projects are grouped by agent `cwd` in `core/town.ts` `townBuildings()` (pure, tested in
+  `core/__tests__/town.test.ts`). No fences/compounds yet — that's a later slice.
 - `npm run spike -- --cwd <repo> --class <Class> --prompt "…"` exercises the whole pipe
   headlessly (no Electron, no map) and prints world state per event — best for debugging the
   reducer. It now `stop()`s itself on the first `agent.turn_finished` (agents no longer
@@ -89,6 +86,150 @@ Reference notes (paths as of the Phase 1.5 refactor — see Done 2026-09-05):
   Code-split before Phase 4 packaging; ignore until then.
 
 ## Done
+
+- **2026-09-11** — **The encounter dialog — Phase 2's last item.** `npm run check` (184 tests,
+  was 169) + `npm run build` green. Committed on `phase-2-subagent-tethering`.
+  - New `core/text/tool-impact.ts`, pure and unit-tested (15 tests): `toolImpact(toolName,
+    rawInput)` derives a real verb + target + optional count from the raw input alone, never an
+    estimate — line counts for `Write`/`Edit` content, literal `rm`/`rmdir` argument counts
+    (bailing to no count the moment any argument could be a glob, `$var`, or backtick
+    substitution), a chained-command count for anything else, and a `hiddenWrite` flag off a
+    reused `WRITE_SMELLS` hit. `describeImpact()` turns that into the dialog's sentence
+    ("wants to delete 3 named targets"), pluralized, never fabricating a number.
+  - `EncounterDialog.tsx`: the agent's name + quantified sentence, the bare real target (full
+    command or path, not truncated), an optional caution line on a hidden-write hit, and an
+    "inspect raw input" toggle replacing the old always-on `JSON.stringify(input)` dump.
+  - Live-verified in Chrome via the throwaway stub (see Gotchas) across Bash (`rm -rf ./dist &&
+    yarn build --force` → "delete 1 named target"), Edit (3-line replace), a hidden-write Bash
+    command, Write (4-line create), the inspect toggle, and a refusal — all correct, console
+    clean, stub deleted afterward.
+  - A `/standards-review` pass caught and fixed two real issues in the new module before this
+    was reported done: the file header cited "VISION" by name (CLAUDE.md §1 bans referencing
+    project docs from comments) and `ToolImpact`'s fields weren't `readonly` (STANDARDS §4 —
+    `core/` types must be deeply readonly).
+  - The user asked for a further comment pass after that: several field/function comments
+    restated what the name and type already said (`verb`, `count`, `describeImpact`'s whole
+    body) and were cut; `toolImpact`'s two parameters were renamed `toolName` / `rawInput` so
+    neither needs a `@param` line, leaving the docblock as a purpose sentence + `@returns`.
+
+- **2026-09-11** — **Phase 2 Slice 4: the visible rate-limit / budget gauge.** VISION's PP/Money
+  row, end to end. `npm run check` (169 tests, was 152) + `npm run build` green. Committed
+  (`f74b639`) on `phase-2-subagent-tethering`.
+  - **Shape confirmed against a real run first, and the plan in this file was half wrong.** The
+    published `.d.ts` types `SDKRateLimitInfo` as flat (`status` / `utilization` / `resetsAt` /
+    `rateLimitType`) with no `unifiedWindows` at all — but a real `rate_limit_event` frame DOES
+    carry `rate_limit_info.unifiedWindows.{five_hour,seven_day}`, each `{ utilization, resetsAt }`.
+    `utilization` is a FRACTION (0-1), and `resetsAt` is epoch SECONDS. (The `.d.ts`'s other
+    rate-limit shape, `SDKControlGetUsageResponse.rate_limits`, is a different mechanism — an
+    on-demand `get_usage` control request — and uses 0-100 percentages with `resets_at`. Don't
+    mix them up.) `translate` narrows `rate_limit_info` by hand for exactly this reason and
+    converts seconds to ms at the boundary, so nothing downstream knows.
+  - **Pipe:** `translate.ts` `case "rate_limit_event"` → new `rate_limit.updated` event
+    (`source: "system"`, `RateLimitStatus` / `RateLimitWindow` / `RateLimitReading` in
+    `core/events.ts`) → `WorldState.rateLimit` (`RateLimitState`, world-level — the budget is
+    the account's, not an agent's) → `rateLimitBudget(world, now)` in `core/selectors.ts`.
+  - **First world-level event.** Every other event folds into one agent; this one folds into the
+    world, and the reporting agent still gets its seq/ts bump (the event really is a line in its
+    log). `freshestReading()` keeps the newer of held-vs-incoming by comparing the two events'
+    own `ts` — every session reports the same account-wide number, so with N agents the readings
+    interleave and on replay the older one can arrive last.
+  - **Renderer:** `components/BudgetGauge.tsx` + `.module.css` — two bars (5h, 7d), percent left,
+    `resets in …`, red under the 15% line (`BUDGET_LOW_FRACTION`, same line as the HP bar), and a
+    `running low` / `rate limited` flag off `status`. Absent entirely when no session has reported
+    a reading, rather than drawing zeros. It owns its own 30s clock tick (`hooks/use-now.ts`) so a
+    minute-resolution countdown doesn't re-render the whole app. `core/text/duration.ts`
+    `shortDuration()` formats the countdown (pure, unit-tested; the Gym's Bash-timeout timer wants
+    the same helper later).
+  - **Verified** three ways: 17 new unit tests (reducer + selectors + translate against the
+    recorded payload); a real `npm run spike` run, where the frame arrived and landed in
+    `world.rateLimit` as `{ utilization: 0.18, resetsAt: 1789129200000 }`; and the stub in a real
+    Chrome tab, driven through all four states — no reading (no panel at all), `allowed` (78%/93%
+    green, no flag), `allowed_warning` (5h 9% red + amber "running low", 7d still green), and
+    `rejected` (0%, red "rate limited"). The live pass caught two things headless could not: the
+    low colour is correctly per-row (only the 5h figure reddened), and a stale reading pushed
+    from a second agent AFTER the rate-limited one did not overwrite it — `freshestReading()`
+    holds in the running app, not just the unit test. Console clean.
+  - **A standards-review pass ran before hand-off** and fixed four of its own findings: a docblock
+    claiming the HP bar already used the 15% line (it is still a placeholder with no number), a
+    `window` parameter shadowing the browser global, a `.low + .figure` CSS rule that coupled the
+    figure's colour to DOM sibling order (now `.row.low .figure`), and a conditional spread in
+    `reduce()` that read worse than a plain early return.
+
+- **2026-09-08** — **Phase 2: both Slice 2 loose ends + Slice 3 (town overview), then a
+  readability/modularity refactor of the whole session's changed files.** `npm run check`
+  (152 tests, was 141) + `npm run build` green, live-verified in Chrome via the stub.
+  Committed 2026-09-09 on branch `phase-2-subagent-tethering` (not merged).
+  - **Loose end #1 — subagent dispatch.** `builder.ts` `tools` includes `Task` + `Agent` (wire
+    name); no other class does. `registry.test.ts` asserts it. A Builder is already
+    unrestricted so it launders nothing; a restricted class + `Task` could route a write
+    through an un-gated subagent.
+  - **Loose end #2 — subagent permission attribution.** New `agent/tool-call-owners.ts`:
+    `toolCallOwners(rootId, rootName)` indexes `translate`'s own `tool.started` / `agent.spawned`
+    drafts as `session.ts` logs them and answers `resolve(toolUseId) → { id, name }`. Timing
+    holds — the assistant `tool_use` message is fully processed before the SDK invokes
+    `canUseTool` for it. `session.ts`'s `canUseTool` stamps the asker on
+    `permission.requested` / `permission.resolved` (user path + bash-guard refuse path) + the
+    `PermissionAsk`. `AgentSupervisor.PendingAsk` gained `sessionAgentId`; `handle.done.finally`
+    → `resolveAsksForSession` fails a subagent's orphaned asks closed. `tool-call-owners` is
+    unit-tested (4 tests); the `session.ts` wiring still wants a real spike run.
+  - **Slice 3 — town overview.** `core/town.ts`: `townBuildings(world)` groups `agentList` by
+    `cwd` (the only project signal), label = last path segment, tallies `needsAttention` /
+    `busy` / `done`. 6 tests in `core/__tests__/town.test.ts`. `hooks/use-map-zoom.ts` holds
+    only `focusedProject` and derives `view` + `focused`. DOM view (dashboard tier, not Pixi):
+    `TownView` → `BuildingCard` → `StatusDot` (a new reusable status-coloured dot;
+    `BuildingCard` is one card — head + dots + tally). `MapPanel` holds the breadcrumb
+    (`Town` / `Town / <label>` + `← town`) and toggles both views with `hidden` so `WorldMap`
+    never unmounts. Single-project worlds: header stays "Map", no town.
+  - **Refactor pass (this session's ask).** STANDARDS §9 rewritten (readable code first, short
+    comments only where needed, JSDoc only where the signature doesn't say it, one-line module
+    headers) + §6 reuse rules + §3 "prefer many small exact files" — the convention now matches
+    how the user wants it written. Applied to every changed file: long comment blocks trimmed;
+    `WorldMap.tsx` (was ~420 lines) split into `components/world-map/` —
+    `geometry.ts` (pure layout maths + room data, no Pixi), `sprite.ts` (one sprite: make +
+    draw), `rooms.ts` (`drawRooms`), `render-agents.ts` (the layout loop + tethers), and the
+    `.tsx` keeps only the Pixi lifecycle; `App.tsx` map panel extracted to `MapPanel.tsx` so
+    the shell is thin again; town selector moved `core/selectors.ts` → `core/town.ts`; subagent
+    attribution extracted `session.ts` → `agent/tool-call-owners.ts`.
+  - **Verified live in Chrome** (stub reverted after) both before and after the refactor —
+    identical behaviour: a 3-project / 6-agent scenario → town shows 3 cards, correct tallies,
+    attention border on the blocked project; card click → filtered building view with the
+    subagent tether intact; `← town` returns; dot click selects without zooming; a `sub-…`
+    `permission.requested` + ask → encounter names the subagent, the child row goes `blocked`
+    while the parent stays `working`; single-project reload → "Map" view, no regression. No
+    console errors.
+
+- **2026-09-08** — **Phase 2 Slice 2b: subagent tether in `WorldMap.tsx`.** Subagents
+  (`AgentState.parentAgentId !== null`) render as a smaller sprite (`SUB_BODY_R` 6 vs `BODY_R`
+  9) in their own room, with a thin line in the child's identity colour from the child to the
+  parent sprite (+ a small dot at the parent end); the line fades (alpha 0.15) when the child
+  or parent is exited/idle, and is skipped entirely when the parent has no sprite (unknown id —
+  no crash). All ring radii (`identity`, `blocked`/`erroring`, `selection`) are now `r`-relative
+  so they scale with the smaller body. Tethers are a single `Graphics` added to `layer` first
+  so they draw beneath every sprite; redrawn each `renderAgents` after all positions are final.
+  No position offset (the line carries the relationship) — noted as a possible refinement.
+  Verified live in Chrome via the throwaway stub across: 2 children in different rooms, a child
+  exiting (line fades), the parent moving rooms (lines follow), an orphan child (unknown
+  parent → no line), a blocked child, selecting a subagent (selection ring scales), and a full
+  replay of a real `npm run spike` subagent log. `npm run check` green, 141 tests (no new —
+  Pixi render, not unit-tested; covered by live verification). `WorldMap.tsx` only.
+  `scripts/_dump-task.mjs` deleted (throwaway from 2a).
+
+- **2026-09-08** — **Phase 2 Slice 2a: subagent tethering — data layer.** The SDK surfaces a
+  subagent inside the *parent's* `query()` stream (one session id), tagging every message with
+  a top-level `parent_tool_use_id`; dedicated `system/task_started` + `task_notification` frames
+  bookend it. `translate.ts` now: mints a stateless child id `sub-<Agent-tool-use-id>` (the same
+  id appears on all three frame types), emits `agent.spawned` (+`agent.prompt`) for the child
+  from `task_started` (gated `task_type === "local_agent"`), attributes any
+  `parent_tool_use_id`-tagged message's events to the child, and exits the child on
+  `task_notification`. `AgentSpawnedEvent.parentAgentId?` (optional — old logs replay);
+  `AgentState.parentAgentId`; `subagentsOf()` selector; `session.ts` passes
+  `forwardSubagentText: true` (so a child gets a thought bubble) and threads `cwd` into
+  `translate`. Reducer: `agent.spawned` no longer force-resets an already-progressed agent
+  (out-of-order tolerance), and drops `agent.exited` for an id never spawned (filters phantom
+  backgrounded-Bash `task_notification`s). `npm run check` green, **141 tests (was 129)**.
+  Verified end-to-end against a real `claude` stream via `npm run spike` (parent dispatches a
+  general-purpose subagent that runs Bash and reports back; child spawns tethered, works, exits
+  0; parent's Agent tool.finished → turn_finished → idle). Rendered in Slice 2b.
 
 - **2026-09-05** — **Phase 1.5 — coding standards + refactor. MERGED to `main`** (PR #1, merge
   `91a8bd1`). Branch `phase-1.5-coding-standards`, 11 commits, one reviewable slice each,
@@ -254,6 +395,97 @@ Reference notes (paths as of the Phase 1.5 refactor — see Done 2026-09-05):
 
 ## Decisions
 
+- **2026-09-11** — **The encounter dialog's quantification never touches the filesystem** — no
+  glob expansion, no `fs.readdir` walk to turn `rm -rf ./dist` into a real "214 files" count.
+  `toolImpact` derives its count from the raw input text alone (line counts, literal `rm`
+  arguments, segment counts); anything that would need resolving a pattern against disk shows no
+  number instead of a guess. Keeps the parser pure and testable in `core/` with zero I/O risk;
+  revisit only if the no-count case turns out to be the common one in practice.
+- **2026-09-11** — **The rate-limit budget is world-level state, not per-agent.** It is the
+  account's number; every session reports the same one. `WorldState.rateLimit` holds the latest
+  and `rate_limit.updated` is the first event that folds into the world rather than an agent (the
+  reporting agent still gets its seq/ts bump, since the event really is a line in its log).
+- **2026-09-11** — **A rate-limit reading is kept only if it is not older than the held one**,
+  compared by the two events' own `ts`. With N agents the readings interleave and replay of two
+  logs can deliver the older last; the alternative — last-write-wins — would let a stale
+  "plenty left" overwrite an active rate-limit, which is the worst lie this panel could tell.
+- **2026-09-11** — **Only the passive `rate_limit_event` stream is consumed; the `get_usage`
+  control request is not.** The passive frame already carries both windows, costs nothing, and is
+  already flowing. Revisit only if a window we need stops appearing there.
+- **2026-09-11** — **The gauge is absent when there is no reading, never a zeroed bar.** VISION's
+  rule one: no element that could be mistaken for information. API-key / Bedrock / Vertex sessions
+  have no plan windows at all, and an empty bar would read as "no budget left".
+- **2026-09-11** — **`docs/STANDARDS.md` §9 now defers to global §1 for comment length**, and a
+  module header is one line stating an invariant, not a description of the file's topic. Applied
+  to this session's new files. Decided by the user.
+
+- **2026-09-08** — **Only the Builder class may dispatch a subagent** (`Task`/`Agent` added to
+  `builder.ts` `tools`, no other class). A Builder is already unrestricted, so a
+  Builder-dispatched one-off cannot exceed the Builder itself; adding `Task` to Scout / Reviewer
+  / Runner / Keeper could launder a capability through an un-gated subagent and break that
+  class's hard guarantee. Revisit the restricted classes once it's confirmed whether the SDK's
+  `tools` cap propagates into a subagent (if it does, Scout + Reviewer become safe read-only
+  fan-out candidates). Chosen by the model, delegated by the user.
+- **2026-09-08** — **A subagent's `canUseTool` ask is attributed by reusing `translate`'s own
+  output**, not by re-parsing SDK messages. `translate` already resolves every
+  `tool.started`/`agent.spawned` to the right sprite (root or `sub-<id>`);
+  `agent/tool-call-owners.ts` indexes those drafts as `session.ts` logs them and answers
+  `resolve(toolUseId)` when `canUseTool` fires. One source of the "who owns this tool call"
+  logic, and it's a tiny unit-tested module rather than loose maps in `session.ts` (which
+  can't be unit-tested — it imports the SDK).
+- **2026-09-08** — **STANDARDS §9 rewritten toward readable-code-first / fewer comments** (with
+  §6 reuse rules and §3 "prefer small exact files"). The user's call: a well-named function or
+  module beats a JSDoc paragraph; comment the non-obvious only; module headers are one line.
+  The existing over-commented files aren't mass-edited — they get trimmed as they're touched.
+- **2026-09-08** — **`WorldMap.tsx` is split into `components/world-map/` `.ts` helpers**, not
+  kept as one 400+-line file. `geometry.ts` (pure — layout maths + room data, no Pixi; could
+  grow tests), `sprite.ts` (one sprite), `rooms.ts`, `render-agents.ts` (the loop + tethers);
+  the `.tsx` keeps only the Pixi lifecycle. A component with real internal complexity owning a
+  subfolder is now sanctioned in STANDARDS §3.
+- **2026-09-08** — **`StatusDot` is a shared primitive** (round dot in the `.status-<status>`
+  colour), used by `BuildingCard` now and available to the agent list / focus panel later —
+  rather than each place hand-rolling a `<span>`. The map keeps its own Pixi `STATUS_TINT` hex
+  (canvas needs numbers); the two are noted as matched, unification deferred.
+- **2026-09-08** — **The town overview groups by `cwd`, not by a git repo root or a
+  `pokehub.workspace.json` fence.** `cwd` is the only project signal an `agent.spawned` carries;
+  compounds / fences / courtyards / pipes (VISION "Projects are compounds") are a later, bigger
+  slice. A building is derived, throwaway (rule 2) — it exists because an agent works there.
+- **2026-09-08** — **`TownView` is plain DOM, not a second Pixi canvas.** The town is a
+  dashboard glance (same tier as the focus panel and raw log, both DOM), and two Pixi
+  `Application`s mounting/unmounting on every zoom toggle is exactly the init/destroy fragility
+  the gotchas warn about. `WorldMap` stays the single Pixi surface and never unmounts —
+  `App.tsx` toggles the two views with `hidden`.
+- **2026-09-08** — **A one-project (or empty) world has no town.** `useMapZoom` forces
+  `view: "building"` and `focused: null` (WorldMap shows the whole world) when
+  `townBuildings(world).length <= 1` — the common single-repo case is byte-for-byte unchanged,
+  the town only appears when there's actually something to overview.
+
+- **2026-09-08** — A subagent is an **`agent.spawned` with `parentAgentId` set**, not a new
+  `agent.tethered` event — the SDK's `task_started` frame carries the parent link and fires
+  before any child message, so the parent is always known at spawn time.
+- **2026-09-08** — The subagent tether is a **line + a smaller sprite, no position offset** —
+  the child stays in whatever room its own tool calls place it (that's real state, rule 1), and
+  the line + size difference carry "attached to / lesser". Nudging the child toward the parent
+  risks the sibling-overlap Slice 1 fixed, for marginal gain. Refinement noted, not done.
+- **2026-09-08** — A subagent's PokeHub id is **`sub-<Agent-tool-use-id>`**, derived, not
+  registered — the same tool-use id appears on `task_started` (`tool_use_id`), every child
+  message (`parent_tool_use_id`), and `task_notification`, so `translate` stays stateless (no
+  parent→child map to keep).
+- **2026-09-08** — A subagent completing is **`agent.exited`** (code 0, or 1 + `reason` on
+  `failed`/`stopped`), never `idle` — a one-off is gone when done and can't be followed up
+  (it has no `AgentHandle`); an `idle` sprite would invite a dead-end follow-up.
+- **2026-09-08** — `translate` gates the child spawn on **`task_type === "local_agent"`** —
+  `task_started` also fires for backgrounded Bash (`local_bash`) and ultracode
+  (`local_workflow`); `task_notification` has no such discriminator, so the reducer's
+  "can't exit an unknown agent" guard filters those instead.
+- **2026-09-08** — **`forwardSubagentText: true`** on the `query()` call — the default forwards
+  only a subagent's `tool_use`/`tool_result` blocks (a heartbeat); we want its text/thinking
+  too so a tethered sprite gets a thought bubble like any agent.
+- **2026-09-08** — Deep nesting (a subagent spawning a subagent) **tethers the grandchild to
+  the session root**, not the intermediate agent — `task_started` carries no parent link and
+  `translate` only knows the root id. One level of visible nesting is the Phase 2 goal; revisit
+  if depth-2 becomes common.
+
 - **2026-09-05** — **`docs/STANDARDS.md` is the code-conventions authority**, one line from
   `CLAUDE.md`; it changes only when a convention actually changes, never for status. Settled
   over 4 rounds of Q&A with the user before any code moved.
@@ -414,6 +646,83 @@ Reference notes (paths as of the Phase 1.5 refactor — see Done 2026-09-05):
 ## Gotchas
 
 _Things learned the hard way. One line each — what broke, and what fixed it._
+
+- **`javascript_tool` reads the DOM synchronously, before React has flushed.** Pushing an event
+  and reading `document.body.innerText` in the SAME call returns the PREVIOUS render — it looks
+  exactly like the event was dropped (the world's seq counter still shows the old value). Push in
+  one call, read or screenshot in the next. Cost ten minutes chasing a phantom reducer bug.
+- **`claude-in-chrome` can report "extension is not connected" while the MCP server is fine.**
+  `list_connected_browsers` returning `[]` (rather than erroring) is the tell: server up, zero
+  extension instances registered. A long-running Chrome that predates an extension install/update
+  never picks it up — quitting and reopening Chrome fixed it. `/mcp` reconnects the server side
+  only and is not enough on its own.
+- **With everything staged, `switch_browser` has nothing to broadcast to when only one browser is
+  registered** — it answers "No other browsers available". A single connected browser is already
+  the active one; just call `tabs_context_mcp`.
+- **The SDK's `.d.ts` UNDER-describes `rate_limit_event`, not just over-describes it.** The
+  published `SDKRateLimitInfo` has no `unifiedWindows` field, yet every real frame carries one —
+  and it is the only part worth drawing (the flat `utilization`/`resetsAt` describe one window,
+  whichever is currently binding). Same lesson as `tool_use_result`: dump a real run, believe the
+  wire. Also two different rate-limit shapes exist in that file — the passive `rate_limit_event`
+  (fraction 0-1, `resetsAt`, epoch seconds) and the on-demand `get_usage` control response
+  (percentage 0-100, `resets_at`, ISO string). They are not interchangeable.
+- **`claude-in-chrome` may simply be unavailable ("Browser extension is not connected").** The
+  fallback that worked: headless Chrome against the same throwaway stub —
+  `/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --headless=new --disable-gpu
+  --window-size=1400,900 --virtual-time-budget=6000 --screenshot=out.png "http://localhost:5173/?scenario"`.
+  Nothing can be pushed after load, so give the stub a `window.__scenario()` that fires itself on
+  a query-string flag. Same delete-it-afterwards rule as the interactive stub.
+- **`run_in_background` plus a trailing `&` detaches the process from the harness** — the wrapper
+  exits 0 immediately and the notification claims the command "completed" while the dev server is
+  still running. Drop the `&`; `run_in_background` already backgrounds it.
+- ~~**A subagent's `canUseTool` prompt is attributed to the parent agent**~~ — **fixed
+  2026-09-08.** `agent/tool-call-owners.ts` indexes `translate`'s `tool.started`/`agent.spawned`
+  drafts as `session.ts` logs them; `canUseTool` calls `resolve(toolUseID)` (the child's
+  tool-use id, which `translate` already keyed the child's `tool.started` on) and stamps the
+  asker on the ask + `permission.*` events. Timing is safe: the assistant `tool_use` message is
+  fully reduced before the SDK invokes `canUseTool` for that call.
+- **A sprite's Pixi click handler is bound once and outlives the render that made it** — so it
+  must read the live prop, not close over the one current at creation. `WorldMap`'s
+  `renderAgents` context passes `onSelect: (id) => propsRef.current.onSelect?.(id)`; a snapshot
+  (`p.onSelect`) would go stale for every already-created sprite. (It happened to work before
+  the split only because `setSelectedId` from `useState` is referentially stable.)
+- **`git checkout <path>` restores from the index, not HEAD** — a background step had staged
+  `src/core/selectors.ts`, so `git checkout src/core/selectors.ts` brought the *staged*
+  (unwanted) version back, not the original. Use `git reset` first, or
+  `git checkout HEAD -- <path>`. (Background agents/steps `git add` the whole tree — known.)
+- **CSS-module class names are hashed, so `[class*="ComponentName"]` DOM selectors don't work
+  in stub verification** — the class is `_card_11dky_1`, not `card`. Match on the hashed prefix
+  (`[class*="dot"]` still catches `_dot_…`) or query by structure/`title`, and prefer a
+  screenshot for anything visual.
+- **Pixi child z-order is insertion order** — adding the tether `Graphics` to `layer` *before*
+  any sprite `Container` keeps it painted underneath, and it stays there because every new
+  sprite `addChild`s on top later. No `zIndex`/`sortableChildren` needed.
+- **`javascript_tool` with a `location.reload()` then a long `await setTimeout` in the same
+  call fails** — "Inspected target navigated or closed": the reload detaches the inspected
+  context mid-evaluation. Reload in one call, push events in the next.
+- **The SDK's Task-dispatch tool is `name: "Agent"` on the wire, not `"Task"`** — the
+  `system/init` `tools` list says `Task`, but the emitted `tool_use` block is `Agent`
+  (SDK docs call it "the Agent/Task tool"). `translate`/`tool-labels` handle both names.
+- **Subagents ride the SAME `query()` stream and session id** — not a separate session as the
+  old Slice 2 note assumed. Every subagent message carries a top-level `parent_tool_use_id`
+  (envelope field, NOT inside `message`), plus `subagent_type`/`task_description`. Bookended by
+  `system/task_started` (before any child message; has `tool_use_id`, `task_type`,
+  `subagent_type`, `spawn_depth`, `prompt`) and `system/task_notification` (`tool_use_id`,
+  terminal `status`, `summary`). Confirmed via `scripts/_dump-task.mjs` against a real run.
+- **By default the SDK forwards only a subagent's `tool_use`/`tool_result` blocks**, not its
+  `text`/`thinking` — set `forwardSubagentText: true` in the `query()` options to get the full
+  child conversation.
+- **`system/task_notification` fires for backgrounded Bash and workflows too**, with no
+  `task_type` field to tell them apart from a subagent — so `translate` mints a `sub-<id>`
+  `agent.exited` for all of them and the reducer drops the exit for any id it never spawned
+  (new guard in `reduce()`). `task_started` is safely gated on `task_type === "local_agent"`.
+- **Piping a `node scripts/*.mjs` that runs `query()` through `head` truncates the run** — when
+  `head` closes the pipe after N lines, node gets SIGPIPE and the stream aborts mid-session
+  (looked like the SDK hanging at message ~14). Redirect to a file, then read the file.
+- ~~**No agent class allow-lists `Task`/`Agent`**~~ — **resolved 2026-09-08: Builder does now,
+  and only Builder.** The other four classes still don't, on purpose (see Decisions). If a
+  Scout/Reviewer/Runner/Keeper ever needs to fan out, first confirm the SDK propagates the
+  parent's `tools` cap to the subagent — otherwise the restricted class's guarantee has a hole.
 
 - **CSS Modules lose every equal-specificity tie to `global.css` unless the global sheet is
   imported first.** `main.tsx` imported `App.tsx` (which transitively pulls in every
@@ -624,3 +933,13 @@ _Decisions made in a session that contradict the spec. Recorded here, not edited
   script, an unlisted runner). The honest phrasing is "hard, and visible when attempted". A
   real guarantee needs a read-only filesystem for the class — worth adding to §Classes as a
   deferred item.
+- **Classes vs. subagent dispatch (found 2026-09-08, Slice 2a; resolved 2026-09-08).** VISION
+  makes "legible delegation … close to the whole point of this app" and describes classes
+  handing work off to each other, but classes are a hard `tools` allow-list and none included
+  `Task`/`Agent`. **Resolved for now by giving Builder alone `Task`** (a Builder is already
+  unrestricted, so it can't launder anything through a subagent). VISION §Classes should say
+  this explicitly — *which* classes may delegate — and note that a restricted class delegating
+  safely depends on the SDK propagating the parent's `tools` cap into the subagent, which is
+  unverified. If that propagation holds, Scout + Reviewer are the natural next classes to allow
+  (read-only fan-out). A hard guarantee for a delegating restricted class still ultimately
+  needs the read-only-filesystem-per-class item already noted above.

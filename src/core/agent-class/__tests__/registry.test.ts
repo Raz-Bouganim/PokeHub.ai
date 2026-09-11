@@ -25,6 +25,16 @@ describe("toolsForClass — classes are hard tool restrictions", () => {
     expect(tools).not.toContain("Bash");
   });
 
+  it("only Builder may dispatch a subagent — a restricted class can't launder work through one", () => {
+    // `Task` is the canonical name; `Agent` is what the SDK emits on the wire.
+    expect(toolsForClass("Builder")!).toEqual(expect.arrayContaining(["Task", "Agent"]));
+    for (const restricted of ["Scout", "Reviewer", "Runner", "Keeper"]) {
+      const tools = toolsForClass(restricted)!;
+      expect(tools, restricted).not.toContain("Task");
+      expect(tools, restricted).not.toContain("Agent");
+    }
+  });
+
   it("returns a fresh array so callers cannot corrupt the table", () => {
     toolsForClass("Builder")!.push("EVIL");
     expect(toolsForClass("Builder")).not.toContain("EVIL");

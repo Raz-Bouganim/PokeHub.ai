@@ -24,6 +24,25 @@
   overflow-x: auto;
 }
 
+.caution {
+  color: var(--status-bad);
+}
+
+.title {
+  opacity: 0.75;
+}
+
+.inspect {
+  background: none;
+  border: none;
+  color: var(--fg-muted);
+  font-size: 0.85em;
+  padding: 0;
+  margin-top: 4px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
 .actions {
   display: flex;
   gap: 8px;

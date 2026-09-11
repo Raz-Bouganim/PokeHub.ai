@@ -43,7 +43,11 @@ export interface SupervisorHooks {
 }
 
 interface PendingAsk {
+  /** Who asked — the root, or a subagent. Fails closed when this agent exits. */
   agentId: string;
+  /** The session's root agent. A subagent has no handle, so its asks are
+   *  cleaned up when the session handle finishes, keyed off this. */
+  sessionAgentId: string;
   resolve: (decision: PermissionDecision) => void;
   /** Fires if the renderer never acks; cleared on ack and on resolution. */
   ackTimer: ReturnType<typeof setTimeout>;
@@ -92,14 +96,20 @@ export class AgentSupervisor {
             // Renderer never confirmed receipt — undeliverable, fail closed.
             this.discardAsk(id)?.resolve("refuse");
           }, ACK_DEADLINE_MS);
-          this.pendingAsks.set(id, { agentId, resolve, ackTimer });
+          this.pendingAsks.set(id, {
+            agentId: ask.agentId,
+            sessionAgentId: agentId,
+            resolve,
+            ackTimer,
+          });
           this.hooks.send(this.hooks.permissionAskChannel, { id, ask });
         }),
     });
 
     this.agents.set(agentId, handle);
     void handle.done.finally(() => {
-      this.resolveAsksForAgent(agentId, "refuse");
+      // Session gone — fail every ask under it, root's and subagents'.
+      this.resolveAsksForSession(agentId, "refuse");
     });
 
     return { agentId, logPath };
@@ -180,6 +190,12 @@ export class AgentSupervisor {
   private resolveAsksForAgent(agentId: string, decision: PermissionDecision): void {
     for (const [id, entry] of this.pendingAsks) {
       if (entry.agentId === agentId) this.discardAsk(id)?.resolve(decision);
+    }
+  }
+
+  private resolveAsksForSession(sessionAgentId: string, decision: PermissionDecision): void {
+    for (const [id, entry] of this.pendingAsks) {
+      if (entry.sessionAgentId === sessionAgentId) this.discardAsk(id)?.resolve(decision);
     }
   }
 }

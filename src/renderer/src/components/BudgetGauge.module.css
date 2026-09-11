@@ -1,0 +1,71 @@
+.panel {
+  flex: none;
+  padding-bottom: 8px;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.flag {
+  font-size: 11px;
+  color: var(--status-warn);
+}
+
+.rejected {
+  color: var(--status-bad);
+}
+
+/* `--fill` is the percentage left, set by the component. */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+  font-size: 11px;
+}
+
+.label {
+  width: 20px;
+  color: var(--fg-dim);
+}
+
+.track {
+  flex: 1;
+  height: 8px;
+  min-width: 40px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.fill {
+  display: block;
+  width: var(--fill);
+  height: 100%;
+  background: var(--status-ok);
+}
+
+.row.low .fill {
+  background: var(--status-bad);
+}
+
+.figure {
+  width: 34px;
+  text-align: right;
+  color: var(--fg-bright);
+}
+
+.row.low .figure {
+  color: var(--status-bad);
+}
+
+.reset {
+  width: 92px;
+  text-align: right;
+  color: var(--fg-muted);
+}
