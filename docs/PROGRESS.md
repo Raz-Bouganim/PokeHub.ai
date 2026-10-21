@@ -5,23 +5,15 @@ The spec is `VISION.md`. The always-on rules are `CLAUDE.md`.
 
 ## Next up
 
-**Phase 2 — Parallel — feature-complete, PR open.** Phase 1 (Legibility) and Phase 1.5
-(coding-standards refactor) are **merged to `main`** — PR #1, merge commit `91a8bd1`
-(2026-09-05). `docs/STANDARDS.md` is now the code-conventions authority; follow it for every
-change and keep `npm run check` (typecheck + lint `--max-warnings 0` + format:check + test)
-green before every commit. Housekeeping: the local `phase-1.5-coding-standards` branch is
-merged and can be deleted.
+**Phase 2 — Parallel — DONE, merged to `main`.** PR #2, merge commit `d737d43`
+(2026-09-11). Phase 1 (Legibility) and Phase 1.5 (coding-standards refactor) were merged
+earlier — PR #1, merge commit `91a8bd1` (2026-09-05). `docs/STANDARDS.md` is the
+code-conventions authority; follow it for every change and keep `npm run check` (typecheck +
+lint `--max-warnings 0` + format:check + test) green before every commit.
 
-Branch `phase-2-subagent-tethering` now carries every Phase 2 slice — subagent tethering
-(2a+2b), both Slice 2 loose ends, Slice 3 (town overview), a readability/modularity refactor,
-Slice 4 (the rate-limit gauge), and the encounter dialog quantification — and has a PR open
-against `main` (see the PR description for the branch's full commit list). `npm run check`
-(184 tests) + `npm run build` green.
-
-**START HERE next session:** check the PR — once it's merged, Phase 2 is done and Phase 3
-(World: character creation, real art, progression, building states, replay scrub) starts per
-VISION's build order. Until then, address review feedback on the PR rather than starting new
-Phase 3 work on top of an unmerged branch.
+**START HERE next session:** Phase 3 (World: character creation, real art, progression,
+building states, replay scrub) starts per VISION's build order. No task chosen yet — propose
+one and wait for confirmation before writing code (per CLAUDE.md working agreements).
 
 **Encounter dialog — DONE 2026-09-11** (see Done). `core/text/tool-impact.ts` (`toolImpact` /
 `describeImpact`) replaces the old tool-name + raw-JSON dialog with a real quantified sentence,
